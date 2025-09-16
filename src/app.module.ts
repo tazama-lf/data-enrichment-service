@@ -5,6 +5,8 @@ import { ConfigModule } from '@nestjs/config';
 import { validate } from './config/env.validation';
 import { PrismaModule } from '../prisma/prisma.module';
 import { PrismaService } from '../prisma/prisma.service';
+import { JobModule } from './job/job.module';
+import { ExecutorModule } from './executor/executor.module';
 
 @Module({
   imports: [
@@ -13,7 +15,9 @@ import { PrismaService } from '../prisma/prisma.service';
       isGlobal: true,
       validate,
     }),
-    PrismaModule
+    PrismaModule,
+    JobModule,
+    ExecutorModule
   ],
   controllers: [AppController],
   providers: [AppService,PrismaService],
