@@ -24,6 +24,9 @@
   },
   "include": [
     "src/**/*",
+    "knex/knex.module.ts",
+    "knex/knexfile.ts",
+    "knex/migrations/**/*.ts"
   ],
   "exclude": [
     "node_modules",

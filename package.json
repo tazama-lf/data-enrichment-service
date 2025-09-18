@@ -18,7 +18,10 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "prepare": "husky"
+    "prepare": "husky",
+    "migrate:make": "knex --knexfile knex/knexfile.ts migrate:make",
+    "migrate:latest": "knex --knexfile knex/knexfile.ts migrate:latest",
+    "migrate:rollback": "knex --knexfile knex/knexfile.ts migrate:rollback"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.6",
@@ -26,16 +29,16 @@
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/schedule": "^6.0.0",
-    "@prisma/client": "^6.16.0",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "axios": "^1.12.2",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "cron": "^4.3.3",
+    "knex": "^3.1.0",
+    "pg": "^8.16.3",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1",
-    "typeorm": "^0.3.26"
+    "rxjs": "^7.8.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
@@ -55,7 +58,6 @@
     "jest": "^30.0.0",
     "lint-staged": "^16.1.6",
     "prettier": "^3.4.2",
-    "prisma": "^6.16.0",
     "source-map-support": "^0.5.21",
     "supertest": "^7.0.0",
     "ts-jest": "^29.2.5",

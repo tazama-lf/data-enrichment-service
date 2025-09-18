@@ -1,12 +1,11 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { KnexModule } from '../knex/knex.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { ConfigModule } from '@nestjs/config';
 import { validate } from './config/env.validation';
-import { PrismaModule } from '../prisma/prisma.module';
-import { PrismaService } from '../prisma/prisma.service';
-import { JobModule } from './job/job.module';
 import { ExecutorModule } from './executor/executor.module';
+import { JobModule } from './job/job.module';
 
 @Module({
   imports: [
@@ -15,11 +14,11 @@ import { ExecutorModule } from './executor/executor.module';
       isGlobal: true,
       validate,
     }),
-    PrismaModule,
     JobModule,
-    ExecutorModule
+    ExecutorModule,
+    KnexModule,
   ],
   controllers: [AppController],
-  providers: [AppService,PrismaService],
+  providers: [AppService],
 })
-export class AppModule { }
+export class AppModule {}
