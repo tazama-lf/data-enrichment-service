@@ -1,31 +1,44 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { SchedulerRegistry } from '@nestjs/schedule';
-import { CronJob } from 'cron';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import * as bcrypt from 'bcrypt';
 import { Knex } from 'knex';
-import { ExecutorService } from '../executor/executor.service';
-import { CreateJob, Job } from './interfaces';
+import { CreateJobDto, SFTPConnectionDto } from './dto/create-job.dto';
+import { Job, SourceType } from './types/job-interfaces';
 
 @Injectable()
 export class JobService {
   constructor(
-    private schedulerRegistry: SchedulerRegistry,
-    private executorService: ExecutorService,
     @Inject('KNEX_CONNECTION') private readonly knex: Knex,
+    private readonly configService: ConfigService,
   ) {}
 
-  async onModuleInit() {
-    const jobs = await this.findAll();
-    if (jobs) {
-      jobs.forEach((job) => void this.addJob(job));
-    }
-  }
+  async create(job: CreateJobDto) {
+    try {
+      let connection = job.connection;
 
-  async create(job: CreateJob) {
-    const [newJob] = await this.knex<Job>('job')
-      .insert(job as Job)
-      .returning('*');
-    this.addJob(newJob);
-    return newJob;
+      if (job.source_type === SourceType.SFTP) {
+        const sftpConn = connection as SFTPConnectionDto;
+        if (sftpConn.password) {
+          const saltRounds = Number(this.configService.get<string>('SALT_ROUNDS') ?? 10);
+          connection = {
+            ...sftpConn,
+            password: await bcrypt.hash(sftpConn.password, saltRounds),
+          };
+        }
+      }
+
+      const [newJob] = await this.knex('job')
+        .insert({ ...job, connection })
+        .returning('*');
+
+      return newJob;
+    } catch (err) {
+      if (Array.isArray(err)) {
+        const messages = err.flatMap((e) => Object.values(e.constraints ?? {}));
+        throw new BadRequestException(messages);
+      }
+      throw new BadRequestException(err.message || 'Invalid request payload');
+    }
   }
 
   async findAll() {
@@ -34,23 +47,10 @@ export class JobService {
 
   async findOne(id: number) {
     const job = await this.knex<Job>('job').where({ id }).first();
+
     if (!job) {
       throw new NotFoundException('Job Not Found');
     }
     return job;
-  }
-
-  addJob(job: Job) {
-    const cronJob = new CronJob(job.cronExpression, async () => {
-      await this.executorService.run(job);
-    });
-    const cronName = `job-${job.id ?? Math.random().toString(36).substring(2)}`;
-    this.schedulerRegistry.addCronJob(cronName, cronJob as any);
-    cronJob.start();
-  }
-
-  async runJob(id: number) {
-    const job = await this.findOne(id);
-    await this.executorService.run(job);
   }
 }

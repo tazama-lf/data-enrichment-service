@@ -1,8 +1,7 @@
-import { SchedulerRegistry } from '@nestjs/schedule';
 import { Test, TestingModule } from '@nestjs/testing';
 import knex from 'knex';
-import { ExecutorService } from '../executor/executor.service';
 import { JobService } from './job.service';
+import { ConfigService } from '@nestjs/config';
 
 describe('JobService', () => {
   let service: JobService;
@@ -10,9 +9,8 @@ describe('JobService', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        ConfigService,
         JobService,
-        SchedulerRegistry,
-        ExecutorService,
         {
           provide: 'KNEX_CONNECTION',
           useValue: knex({
