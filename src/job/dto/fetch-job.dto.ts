@@ -1,5 +1,5 @@
-import { Expose, Type } from 'class-transformer';
-import { AuthType, ConfigType, SourceType } from '../../utils/interfaces';
+import { Expose, Transform, Type } from 'class-transformer';
+import { AuthType, ConfigType, EncodingType, FileType, SourceType } from '../../utils/interfaces';
 
 export class HTTPConnectionDto {
   @Expose()
@@ -21,6 +21,23 @@ export class SFTPConnectionDto {
 
   @Expose()
   user_name: string;
+}
+
+class FileSettingDto {
+  @Expose()
+  path: string;
+
+  @Expose()
+  file_type: FileType;
+
+  @Expose()
+  delimiter: string;
+
+  @Expose()
+  header: boolean;
+
+  @Expose()
+  encoding: EncodingType;
 }
 
 export class JobResponseDto {
@@ -51,6 +68,16 @@ export class JobResponseDto {
     return Object;
   })
   connection: HTTPConnectionDto | SFTPConnectionDto;
+
+  @Expose()
+  @Transform(({ obj, value }) => {
+    if (obj?.source_type === SourceType.SFTP) {
+      return value;
+    }
+    return undefined;
+  })
+  @Type(() => FileSettingDto)
+  file?: FileSettingDto;
 
   @Expose()
   table_name: string;

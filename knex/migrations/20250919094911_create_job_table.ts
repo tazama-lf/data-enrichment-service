@@ -8,6 +8,7 @@ export async function up(knex: Knex): Promise<void> {
     table.enu('source_type', ['SFTP', 'HTTP']).notNullable();
     table.string('description').notNullable();
     table.jsonb('connection').notNullable();
+    table.jsonb('file');
     table.string('table_name').notNullable();
     table.timestamps(true, true);
   });

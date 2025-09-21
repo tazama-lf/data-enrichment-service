@@ -1,8 +1,8 @@
-import { IsEnum, IsNotEmpty, IsNumber, IsObject, IsString, IsUrl, ValidateNested } from 'class-validator';
-import { AuthType, ConfigType, SourceType } from '../../utils/interfaces';
+import { IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsObject, IsString, IsUrl, ValidateNested } from 'class-validator';
+import { AuthType, ConfigType, EncodingType, FileType, SourceType } from '../../utils/interfaces';
 import { Type } from 'class-transformer';
 
-export class HTTPConnectionDto {
+class HTTPConnectionDto {
   @IsString()
   url: string;
 
@@ -29,6 +29,23 @@ export class SFTPConnectionDto {
   @IsString()
   @IsNotEmpty()
   password: string;
+}
+
+class FileSettingDto {
+  @IsString()
+  path: string;
+
+  @IsEnum(FileType)
+  file_type: FileType;
+
+  @IsString()
+  delimiter: string;
+
+  @IsBoolean()
+  header: boolean;
+
+  @IsEnum(EncodingType)
+  encoding: EncodingType;
 }
 
 export class CreateJobDto {
@@ -58,6 +75,16 @@ export class CreateJobDto {
     return Object;
   })
   connection: HTTPConnectionDto | SFTPConnectionDto;
+
+  @ValidateNested()
+  @Type((opts) => {
+    const obj = opts?.object as any;
+    if (obj?.source_type === SourceType.SFTP) {
+      return FileSettingDto;
+    }
+    return Object;
+  })
+  file: FileSettingDto;
 
   @IsString()
   @IsNotEmpty()
