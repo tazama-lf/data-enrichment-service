@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { KnexModule } from '../knex/knex.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { validate } from './config/env.validation';
 import { ExecutorModule } from './executor/executor.module';
 import { JobModule } from './job/job.module';
+import { SchedulerModule } from './scheduler/scheduler.module';
+import { KnexModule } from '../knex/knex.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { JobModule } from './job/job.module';
     JobModule,
     ExecutorModule,
     KnexModule,
+    SchedulerModule,
   ],
   controllers: [AppController],
   providers: [AppService],
