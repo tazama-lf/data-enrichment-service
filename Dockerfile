@@ -10,6 +10,7 @@ WORKDIR /home/app
 COPY ./src ./src
 COPY ./package*.json ./
 COPY ./tsconfig.json ./
+COPY ./knex ./knex
 # COPY .npmrc ./
 # ARG GH_TOKEN
 
@@ -84,4 +85,4 @@ ENV PRODUCER_RETENTION_POLICY=Workqueue
 ENV SIDECAR_HOST=0.0.0.0:5000
 
 # Execute watchdog command
-CMD ["dist/main.js"]
+CMD ["node","dist/main.js"]
