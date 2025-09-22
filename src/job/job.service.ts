@@ -41,8 +41,14 @@ export class JobService {
     }
   }
 
-  async findAll() {
-    return this.knex<Job>('job').select('*');
+  async findAll(page = 1, limit = 10) {
+    const offset = (page - 1) * limit;
+    const [data] = await Promise.all([
+      this.knex('job').select('*').limit(limit).offset(offset).orderBy('created_at', 'desc'),
+      this.knex('job').count('* as count'),
+    ]);
+
+    return data;
   }
 
   async findOne(id: number) {

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { Serialize } from '../interceptors/serialize.interceptor';
 import { CreateJobDto } from './dto/create-job.dto';
 import { JobResponseDto } from './dto/fetch-job.dto';
@@ -15,8 +15,8 @@ export class JobController {
   }
 
   @Get('/all')
-  async getAll() {
-    return this.jobService.findAll();
+  async getAll(@Query('page') page = 1, @Query('limit') limit = 10) {
+    return this.jobService.findAll(Number(page), Number(limit));
   }
 
   @Get('/:id')
