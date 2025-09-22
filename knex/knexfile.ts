@@ -1,18 +1,13 @@
 import type { Knex } from 'knex';
-import { ConfigService } from '@nestjs/config';
-import { ConfigModule } from '@nestjs/config';
-
-ConfigModule.forRoot();
-const configService = new ConfigService();
 
 const config: { [key: string]: Knex.Config } = {
   development: {
     client: 'pg',
     connection: {
-      host: configService.get<string>('CONFIGURATION_DATABASE_HOST'),
-      user: configService.get<string>('CONFIGURATION_DATABASE_USER'),
-      password: configService.get<string>('CONFIGURATION_DATABASE_PASSWORD'),
-      database: configService.get<string>('CONFIGURATION_DATABASE'),
+      host: process.env.CONFIGURATION_DATABASE_HOST || 'localhost',
+      user: process.env.CONFIGURATION_DATABASE_USER || 'postgres',
+      password: process.env.CONFIGURATION_DATABASE_PASSWORD || 'postgres',
+      database: process.env.CONFIGURATION_DATABASE || 'mydb',
     },
     migrations: {
       directory: './migrations',
