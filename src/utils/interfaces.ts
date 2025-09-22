@@ -25,4 +25,11 @@ enum EncodingType {
   UTF16 = 'UTF-16',
 }
 
-export { SourceType, FileType, AuthType, ConfigType, EncodingType };
+enum JobStatus {
+  PENDING = 'PENDING',
+  INPROGRESS = 'IN-PROGRESS',
+  SUSPENDED = 'SUSPENDED',
+  CLONED = 'CLONED',
+}
+
+export { SourceType, FileType, AuthType, ConfigType, EncodingType, JobStatus };

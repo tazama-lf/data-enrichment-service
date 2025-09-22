@@ -1,5 +1,5 @@
 import { IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsObject, IsString, IsUrl, ValidateNested } from 'class-validator';
-import { AuthType, ConfigType, EncodingType, FileType, SourceType } from '../../utils/interfaces';
+import { AuthType, ConfigType, EncodingType, FileType, JobStatus, SourceType } from '../../utils/interfaces';
 import { Type } from 'class-transformer';
 
 class HTTPConnectionDto {
@@ -89,4 +89,7 @@ export class CreateJobDto {
   @IsString()
   @IsNotEmpty()
   table_name: string;
+
+  @IsEnum(JobStatus)
+  job_status: JobStatus = JobStatus.PENDING;
 }

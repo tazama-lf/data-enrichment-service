@@ -10,6 +10,7 @@ export async function up(knex: Knex): Promise<void> {
     table.jsonb('connection').notNullable();
     table.jsonb('file');
     table.string('table_name').notNullable();
+    table.enu('job_status', ['PENDING', 'IN-PROGRESS', 'SUSPENDED', 'CLONED']).notNullable();
     table.timestamps(true, true);
   });
 }

@@ -1,5 +1,5 @@
 import { Expose, Transform, Type } from 'class-transformer';
-import { AuthType, ConfigType, EncodingType, FileType, SourceType } from '../../utils/interfaces';
+import { AuthType, ConfigType, EncodingType, FileType, JobStatus, SourceType } from '../../utils/interfaces';
 
 export class HTTPConnectionDto {
   @Expose()
@@ -87,4 +87,7 @@ export class JobResponseDto {
 
   @Expose()
   updated_at: Date;
+
+  @Expose()
+  job_status: JobStatus;
 }
