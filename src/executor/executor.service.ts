@@ -1,7 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import axios from 'axios';
 import knex, { Knex } from 'knex';
-import { Schedule, SourceType } from '../scheduler/scheduler-interfaces';
 
 @Injectable()
 export class ExecutorService {
@@ -24,16 +22,5 @@ export class ExecutorService {
       });
     }
     return this.knex(tableName).insert({ data: user }).returning('*');
-  }
-
-  async run(job: Schedule) {
-    if (job.source_type === SourceType.HTTP) {
-      try {
-        const { data } = await axios.get(job.source_path);
-        await this.ensureTable('user', data?.users?.[0]);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      }
-    }
   }
 }

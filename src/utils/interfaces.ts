@@ -32,4 +32,9 @@ enum JobStatus {
   CLONED = 'CLONED',
 }
 
-export { SourceType, FileType, AuthType, ConfigType, EncodingType, JobStatus };
+enum ScheduleStatus {
+  ACTIVE = 'active',
+  PAUSED = 'paused',
+}
+
+export { SourceType, ScheduleStatus, FileType, AuthType, ConfigType, EncodingType, JobStatus };

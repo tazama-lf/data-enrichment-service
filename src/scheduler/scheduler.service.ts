@@ -1,17 +1,18 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { Knex } from 'knex';
-import { Schedule } from './scheduler-interfaces';
-import { CronJob } from 'cron';
-import { ExecutorService } from '../executor/executor.service';
-import { SchedulerRegistry } from '@nestjs/schedule';
+import { CreateScheduleJobDto } from './dto/create-schedule.dto';
+import { ScheduleDto } from './dto/schedule.dto';
+import { Schedule } from './types/scheduler-interfaces';
 
 @Injectable()
 export class SchedulerService {
-  constructor(
-    @Inject('KNEX_CONNECTION') private readonly knex: Knex,
-    private executorService: ExecutorService,
-    private schedulerRegistry: SchedulerRegistry,
-  ) {}
+  constructor(@Inject('KNEX_CONNECTION') private readonly knex: Knex) {}
+
+  async create(schedule: CreateScheduleJobDto) {
+    const [result] = await this.knex('schedule').insert(schedule).returning('*');
+
+    return result;
+  }
 
   async findAll() {
     return this.knex<Schedule>('schedule').select('*');
@@ -20,22 +21,34 @@ export class SchedulerService {
   async findOne(id: number) {
     const schedule = await this.knex<Schedule>('schedule').where({ id }).first();
     if (!schedule) {
-      throw new NotFoundException('Scheduled Job Not Found');
+      throw new NotFoundException('Configuration Not Found');
     }
     return schedule;
   }
 
-  async scheduleJob(schedule: Schedule) {
-    const cronJob = new CronJob(schedule.cron_expression, async () => {
-      await this.executorService.run(schedule);
-    });
-    const cronName = `job-${schedule.id ?? Math.random().toString(36).substring(2)}`;
-    this.schedulerRegistry.addCronJob(cronName, cronJob as any);
-    cronJob.start();
+  async remove(id: number) {
+    const schedule = await this.knex<Schedule>('schedule').where({ id }).first();
+    if (!schedule) {
+      throw new NotFoundException('Configuration Not Found');
+    }
+    const res = await this.knex<Schedule>('schedule').where('id', id).del();
+    if (res) {
+      return {
+        success: true,
+        message: `Configuration with id ${id} successfully deleted`,
+      };
+    } else {
+      throw new InternalServerErrorException('Internal Server Error');
+    }
   }
 
-  async runById(id: number) {
-    const job = await this.findOne(id);
-    await this.executorService.run(job);
+  async update(id: number, attr: Partial<ScheduleDto>) {
+    const schedule = await this.knex<Schedule>('schedule').where({ id }).first();
+    if (!schedule) {
+      throw new NotFoundException('Configuration Not Found');
+    }
+    await this.knex<Schedule>('schedule').where({ id }).update(attr);
+
+    return this.findOne(id);
   }
 }
