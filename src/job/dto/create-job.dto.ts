@@ -53,6 +53,9 @@ export class CreateJobDto {
   @IsNotEmpty()
   endpoint_name: string;
 
+  @IsNumber()
+  schedule_id: number;
+
   @IsEnum(SourceType)
   source_type: SourceType;
 

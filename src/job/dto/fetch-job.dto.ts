@@ -45,6 +45,9 @@ export class JobResponseDto {
   id: number;
 
   @Expose()
+  schedule_id: number;
+
+  @Expose()
   config_type: ConfigType;
 
   @Expose()
