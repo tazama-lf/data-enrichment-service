@@ -3,11 +3,14 @@ import { ExecutorService } from '../executor/executor.service';
 import { JobController } from './job.controller';
 import { JobService } from './job.service';
 import { CreateJobDto } from './dto/create-job.dto';
+import { SchedulerService } from '../scheduler/scheduler.service';
 
 describe('JobController', () => {
   let controller: JobController;
   let service: JobService;
   let fakeKnex: any;
+  let fakeSchedulerService: SchedulerService;
+  let fakeExecutorService: ExecutorService;
 
   const mockJobService = {
     create: jest.fn(),
@@ -20,7 +23,11 @@ describe('JobController', () => {
       controllers: [JobController],
       providers: [
         { provide: JobService, useValue: mockJobService },
-        ExecutorService,
+        { provide: ExecutorService, useValue: fakeExecutorService },
+        {
+          provide: SchedulerService,
+          useValue: fakeSchedulerService,
+        },
         {
           provide: 'KNEX_CONNECTION',
           useValue: fakeKnex,

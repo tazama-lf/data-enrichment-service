@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { JobService } from './job.service';
 import * as bcrypt from 'bcrypt';
+import { SchedulerService } from '../scheduler/scheduler.service';
+import { ExecutorService } from '../executor/executor.service';
 
 jest.mock('bcrypt', () => ({
   hash: jest.fn(),
@@ -12,6 +14,8 @@ describe('JobService', () => {
   let service: JobService;
   let fakeKnex: any;
   let queryBuilder: any;
+  let fakeSchedulerService: SchedulerService;
+  let fakeExecutorService: ExecutorService;
 
   beforeEach(async () => {
     queryBuilder = {
@@ -35,6 +39,11 @@ describe('JobService', () => {
           useValue: { get: jest.fn().mockReturnValue('10') },
         },
         JobService,
+        { provide: ExecutorService, useValue: fakeExecutorService },
+        {
+          provide: SchedulerService,
+          useValue: fakeSchedulerService,
+        },
         {
           provide: 'KNEX_CONNECTION',
           useValue: fakeKnex,

@@ -1,5 +1,6 @@
 import { Expose, Transform, Type } from 'class-transformer';
 import { AuthType, ConfigType, EncodingType, FileType, JobStatus, SourceType } from '../../utils/interfaces';
+import { Schedule } from '../../scheduler/types/scheduler-interfaces';
 
 export class HTTPConnectionDto {
   @Expose()
@@ -93,4 +94,7 @@ export class JobResponseDto {
 
   @Expose()
   job_status: JobStatus;
+
+  @Expose()
+  schedule: Schedule;
 }

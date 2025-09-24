@@ -3,14 +3,27 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { Knex } from 'knex';
 import { CreateJobDto, SFTPConnectionDto } from './dto/create-job.dto';
-import { Job, SourceType } from './types/job-interfaces';
+import { Job } from './types/job-interfaces';
+import { UpdateJobStatusDto } from './dto/update-status.dto';
+import { SchedulerService } from '../scheduler/scheduler.service';
+import { ExecutorService } from '../executor/executor.service';
+import { JobStatus, SourceType } from '../utils/interfaces';
 
 @Injectable()
 export class JobService {
   constructor(
     @Inject('KNEX_CONNECTION') private readonly knex: Knex,
     private readonly configService: ConfigService,
+    private readonly scheduleService: SchedulerService,
+    private readonly executorService: ExecutorService,
   ) {}
+
+  async onModuleInit() {
+    const jobs = await this.findAll();
+    if (jobs) {
+      jobs.filter((opt) => opt.job_status === JobStatus.INPROGRESS).forEach((job) => void this.execute(job.id));
+    }
+  }
 
   async create(job: CreateJobDto) {
     try {
@@ -58,5 +71,19 @@ export class JobService {
       throw new NotFoundException('Job Not Found');
     }
     return job;
+  }
+
+  async execute(id: number) {
+    const res = await this.findOne(id);
+    const schedule = await this.scheduleService.findOne(res.schedule_id);
+    this.executorService.addCronJob({ ...res, schedule });
+  }
+
+  async updateStatus(id: number, job: UpdateJobStatusDto) {
+    await this.knex<Job>('job').where({ id }).update({ job_status: job.job_status });
+
+    if (job.job_status === JobStatus.INPROGRESS) {
+      this.execute(id);
+    }
   }
 }
