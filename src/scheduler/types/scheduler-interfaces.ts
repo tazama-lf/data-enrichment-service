@@ -5,7 +5,7 @@ interface Schedule {
   name: string;
   iterations: number;
   schedule_status: ScheduleStatus;
-  next_time?: string;
+  next_time?: string | null;
   cron: string;
 }
 

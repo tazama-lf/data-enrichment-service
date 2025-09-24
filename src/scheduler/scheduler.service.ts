@@ -14,8 +14,14 @@ export class SchedulerService {
     return result;
   }
 
-  async findAll() {
-    return this.knex<Schedule>('schedule').select('*');
+  async findAll(page = 1, limit = 10) {
+    const offset = (page - 1) * limit;
+    const [data] = await Promise.all([
+      this.knex('schedule').select('*').limit(limit).offset(offset),
+      this.knex('schedule').count('* as count'),
+    ]);
+
+    return data;
   }
 
   async findOne(id: number) {
@@ -43,7 +49,7 @@ export class SchedulerService {
   }
 
   async update(id: number, attr: Partial<ScheduleDto>) {
-    const schedule = await this.knex<Schedule>('schedule').where({ id }).first();
+    const schedule = await this.findOne(id);
     if (!schedule) {
       throw new NotFoundException('Configuration Not Found');
     }
