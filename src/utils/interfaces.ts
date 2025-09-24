@@ -19,10 +19,10 @@ enum AuthType {
 }
 
 enum EncodingType {
-  UTF8 = 'UTF-8',
-  ASCII = 'ASCII',
-  LATIN = 'Latin-1',
-  UTF16 = 'UTF-16',
+  UTF8 = 'utf8',
+  ASCII = 'ascii',
+  LATIN1 = 'latin1',
+  UTF16 = 'utf16le',
 }
 
 enum JobStatus {

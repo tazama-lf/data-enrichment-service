@@ -1,4 +1,4 @@
-import { IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsObject, IsString, IsUrl, ValidateNested } from 'class-validator';
+import { IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsObject, IsString, ValidateNested } from 'class-validator';
 import { AuthType, ConfigType, EncodingType, FileType, JobStatus, SourceType } from '../../utils/interfaces';
 import { Type } from 'class-transformer';
 
@@ -12,7 +12,7 @@ class HTTPConnectionDto {
 }
 
 export class SFTPConnectionDto {
-  @IsUrl()
+  @IsString()
   host: string;
 
   @IsNumber()
