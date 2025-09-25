@@ -7,13 +7,17 @@ import knex, { Knex } from 'knex';
 import SFTPClient from 'ssh2-sftp-client';
 import { HTTPConnection, Job, SFTPConnection } from '../job/types/job-interfaces';
 import { EncodingType, FileType, SourceType } from '../utils/interfaces';
+import { LoggerService } from '@tazama-lf/frms-coe-lib';
 
 @Injectable()
 export class ExecutorService {
   private knex: Knex;
   private readonly failureCounters = new Map<string, number>();
 
-  constructor(private schedulerRegistry: SchedulerRegistry) {
+  constructor(
+    private readonly schedulerRegistry: SchedulerRegistry,
+    private readonly loggerService: LoggerService,
+  ) {
     this.knex = knex({
       client: 'pg',
       connection: process.env.DATABASE_URL,
@@ -32,7 +36,7 @@ export class ExecutorService {
       }
     } catch (err: any) {
       if (err.message.includes('already exists')) {
-        console.log(`Table ${tableName} already created, ignoring...`);
+        this.loggerService.log(`Table ${tableName} already created, ignoring...`);
       } else {
         throw err;
       }
@@ -77,10 +81,14 @@ export class ExecutorService {
           });
 
           const filePath = file?.path;
-          if (!filePath) throw new Error('File path not provided in job config');
+          if (!filePath) {
+            this.loggerService.error('File path not provided in job config');
+            throw new Error('File path not provided in job config');
+          }
 
           const fileExists = await sftp.exists(filePath);
           if (!fileExists) {
+            this.loggerService.error('File path not found on SFTP server');
             throw new Error(`File ${filePath} not found on SFTP server`);
           }
 
@@ -116,8 +124,8 @@ export class ExecutorService {
               try {
                 const parsed = JSON.parse(rawContent);
                 records = Array.isArray(parsed) ? parsed : [parsed];
-              } catch (err) {
-                console.log('ERORRR', err);
+              } catch (error) {
+                this.loggerService.error(`Unable to parse JSON :  ${error.message}`);
               }
               break;
 
@@ -130,15 +138,15 @@ export class ExecutorService {
           }
 
           this.failureCounters.set(jobKey, 0);
-        } catch (err) {
-          console.log('SFTP ERROR', err);
+        } catch (error) {
+          this.loggerService.error(`SFTP error :  ${error.message}`);
           await this.handleFailure(job, jobKey);
         } finally {
           sftp.end();
         }
       }
-    } catch (err) {
-      console.log('ERROR', err);
+    } catch (error) {
+      this.loggerService.error(`Failed to execute job : ${error.message}`);
       this.handleFailure(job, jobKey);
     }
   }
