@@ -1,0 +1,24 @@
+import { registerDecorator, ValidationOptions, ValidationArguments } from 'class-validator';
+
+export function IsJsonOrArray(validationOptions?: ValidationOptions) {
+  return function (object: object, propertyName: string) {
+    registerDecorator({
+      name: 'isJsonOrArray',
+      target: object.constructor,
+      propertyName: propertyName,
+      options: validationOptions,
+      validator: {
+        validate(value: any) {
+          if (typeof value !== 'object' || value === null) return false;
+          if (Array.isArray(value)) {
+            return value.every((item) => typeof item === 'object' && item !== null);
+          }
+          return true;
+        },
+        defaultMessage(args: ValidationArguments) {
+          return `${args.property} must be either a JSON object or an array of JSON objects`;
+        },
+      },
+    });
+  };
+}
