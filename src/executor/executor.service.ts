@@ -24,7 +24,7 @@ export class ExecutorService {
     });
   }
 
-  private async ensureTable(tableName: string, data: any) {
+  async ensureTable(tableName: string, data?: any) {
     try {
       const exists = await this.knex.schema.hasTable(tableName);
       if (!exists) {
@@ -41,7 +41,14 @@ export class ExecutorService {
         throw err;
       }
     }
-    return this.knex(tableName).insert({ data }).returning('*');
+    if (data) {
+      this.insertData(tableName, data);
+    }
+    return;
+  }
+
+  async insertData(tableName: string, data: any) {
+    await this.knex(tableName).insert({ data }).returning('*');
   }
 
   private async handleFailure(job: Job, jobKey: string) {
