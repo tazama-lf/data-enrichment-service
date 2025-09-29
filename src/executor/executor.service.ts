@@ -8,6 +8,8 @@ import SFTPClient from 'ssh2-sftp-client';
 import { HTTPConnection, Job, SFTPConnection } from '../job/types/job-interfaces';
 import { EncodingType, FileType, SourceType } from '../utils/interfaces';
 import { LoggerService } from '@tazama-lf/frms-coe-lib';
+import { decrypt, getNextTime } from '../utils/helpers';
+import { Schedule } from '../scheduler/types/scheduler-interfaces';
 
 @Injectable()
 export class ExecutorService {
@@ -84,7 +86,7 @@ export class ExecutorService {
             host: sftpCon.host,
             port: sftpCon.port,
             username: sftpCon.user_name,
-            password: 'password',
+            password: decrypt(sftpCon.password),
           });
 
           const filePath = file?.path;
@@ -155,6 +157,10 @@ export class ExecutorService {
     } catch (error) {
       this.loggerService.error(`Failed to execute job : ${error.message}`);
       this.handleFailure(job, jobKey);
+    } finally {
+      await this.knex<Schedule>('schedule')
+        .where({ id: job.schedule.id })
+        .update({ next_time: getNextTime(job.schedule.cron) });
     }
   }
 

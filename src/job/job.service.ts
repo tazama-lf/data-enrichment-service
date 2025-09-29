@@ -1,12 +1,12 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as bcrypt from 'bcrypt';
 import { createHash } from 'crypto';
 import { Request } from 'express';
 import { Knex } from 'knex';
 import { v4 } from 'uuid';
 import { ExecutorService } from '../executor/executor.service';
 import { SchedulerService } from '../scheduler/scheduler.service';
+import { encrypt } from '../utils/helpers';
 import { JobStatus, SourceType } from '../utils/interfaces';
 import { CreateEnrichDataDto } from './dto/create-enrich-data.dto';
 import { CreatePullJobDto, SFTPConnectionDto } from './dto/create-pull-job.dto';
@@ -92,10 +92,9 @@ export class JobService {
       if (job.source_type === SourceType.SFTP) {
         const sftpConn = connection as SFTPConnectionDto;
         if (sftpConn.password) {
-          const saltRounds = Number(this.configService.get<string>('SALT_ROUNDS') ?? 10);
           connection = {
             ...sftpConn,
-            password: await bcrypt.hash(sftpConn.password, saltRounds),
+            password: encrypt(sftpConn.password),
           };
         }
       }

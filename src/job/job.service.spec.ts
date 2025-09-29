@@ -1,18 +1,16 @@
 import { NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
-import { JobService } from './job.service';
-import * as bcrypt from 'bcrypt';
-import { SchedulerService } from '../scheduler/scheduler.service';
 import { ExecutorService } from '../executor/executor.service';
-
-jest.mock('bcrypt', () => ({
-  hash: jest.fn(),
-}));
+import { SchedulerService } from '../scheduler/scheduler.service';
+import * as cryptoUtils from '../utils/helpers';
+import { JobService } from './job.service';
 
 jest.mock('uuid', () => ({
   v4: jest.fn(() => 'asd13as-asd13sfgwg-123jbuqr4'),
 }));
+
+jest.spyOn(cryptoUtils, 'encrypt').mockImplementation(() => 'hashed_pass');
 
 describe('JobService', () => {
   let service: JobService;
@@ -74,15 +72,12 @@ describe('JobService', () => {
 
     const job = await service.createPull(httpPayload as any);
 
-    expect(bcrypt.hash).not.toHaveBeenCalled();
     expect(job.id).toEqual('asd13as-asd13sfgwg-123jbuqr4');
     expect(queryBuilder.insert).toHaveBeenCalledWith({ ...httpPayload, id: 'asd13as-asd13sfgwg-123jbuqr4' });
     expect(job).toEqual({ id: 'asd13as-asd13sfgwg-123jbuqr4', name: 'Test Job' });
   });
 
   it('should hash password for SFTP job payload', async () => {
-    (bcrypt.hash as jest.Mock).mockResolvedValue('hashed_pass');
-
     const sftpPayload = {
       endpoint_name: 'SecureDummy',
       source_type: 'SFTP',
@@ -93,13 +88,14 @@ describe('JobService', () => {
 
     const result = await service.createPull(sftpPayload as any);
 
-    expect(bcrypt.hash).toHaveBeenCalledWith('plain_pass', 10);
     expect(result.id).toEqual('asd13as-asd13sfgwg-123jbuqr4');
     expect(queryBuilder.insert).toHaveBeenCalledWith({
       ...sftpPayload,
       id: 'asd13as-asd13sfgwg-123jbuqr4',
       connection: { host: 'sftp.example.com', username: 'user1', password: 'hashed_pass' },
     });
+    const insertedPayload = (queryBuilder.insert as jest.Mock).mock.calls[0][0];
+    expect(insertedPayload.connection.password).not.toEqual('plain_pass');
     expect(result).toEqual({ id: 'asd13as-asd13sfgwg-123jbuqr4', name: 'Inserted Job' });
   });
 
