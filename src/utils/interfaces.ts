@@ -37,4 +37,9 @@ enum ScheduleStatus {
   PAUSED = 'paused',
 }
 
-export { SourceType, ScheduleStatus, FileType, AuthType, ConfigType, EncodingType, JobStatus };
+enum IngestMode {
+  APPEND = 'append',
+  REPLACE = 'replace',
+}
+
+export { SourceType, ScheduleStatus, FileType, AuthType, ConfigType, EncodingType, JobStatus, IngestMode };

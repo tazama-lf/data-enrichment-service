@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ExecutorService } from '../executor/executor.service';
 import { JobController } from './job.controller';
 import { JobService } from './job.service';
-import { CreateJobDto } from './dto/create-job.dto';
+import { CreatePullJobDto } from './dto/create-pull-job.dto';
 import { SchedulerService } from '../scheduler/scheduler.service';
 
 describe('JobController', () => {
@@ -13,9 +13,7 @@ describe('JobController', () => {
   let fakeExecutorService: ExecutorService;
 
   const mockJobService = {
-    create: jest.fn(),
-    findAll: jest.fn(),
-    findOne: jest.fn(),
+    createPull: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -46,8 +44,7 @@ describe('JobController', () => {
   });
 
   it('should create job and return result successfully', async () => {
-    const dto: CreateJobDto = {
-      config_type: 'Pull',
+    const dto: CreatePullJobDto = {
       endpoint_name: 'Dummy',
       source_type: 'HTTP',
       description: 'Dummy Pull',
@@ -56,31 +53,11 @@ describe('JobController', () => {
     } as any;
 
     const expectedResult = { id: 1, ...dto };
-    mockJobService.create.mockResolvedValue(expectedResult);
+    mockJobService.createPull.mockResolvedValue(expectedResult);
 
-    const result = await controller.createJob(dto);
+    const result = await controller.createPullJob(dto);
 
-    expect(service.create).toHaveBeenCalledWith(dto);
+    expect(service.createPull).toHaveBeenCalledWith(dto);
     expect(result).toEqual(expectedResult);
-  });
-
-  it('should return jobs with page and limit provided', async () => {
-    const jobs = [{ id: 1, name: 'Job 1' }];
-    mockJobService.findAll.mockResolvedValue(jobs);
-
-    const result = await controller.getAll(2, 5);
-
-    expect(service.findAll).toHaveBeenCalledWith(2, 5);
-    expect(result).toEqual(jobs);
-  });
-
-  it('should return jobs with page and limit not provided', async () => {
-    const jobs = [{ id: 1, name: 'Job 1' }];
-    mockJobService.findAll.mockResolvedValue(jobs);
-
-    const result = await controller.getAll(undefined, undefined);
-
-    expect(service.findAll).toHaveBeenCalledWith(1, 10);
-    expect(result).toEqual(jobs);
   });
 });

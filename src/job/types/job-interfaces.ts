@@ -1,5 +1,5 @@
 import { Schedule } from '../../scheduler/types/scheduler-interfaces';
-import { AuthType, ConfigType, EncodingType, FileType, JobStatus, SourceType } from '../../utils/interfaces';
+import { AuthType, EncodingType, FileType, JobStatus, SourceType } from '../../utils/interfaces';
 
 interface HTTPConnection {
   url: string;
@@ -23,9 +23,8 @@ interface FileSettings {
 }
 
 interface Job {
-  id: number;
+  id: string;
   schedule_id: number;
-  config_type: ConfigType;
   endpoint_name: string;
   source_type: SourceType;
   description: string;
@@ -36,4 +35,13 @@ interface Job {
   schedule?: Schedule;
 }
 
-export { Job, HTTPConnection, SFTPConnection };
+interface Enrichment {
+  id: number;
+  tenant_id: string;
+  endpoint_id: number;
+  correlation_id: string;
+  checksum: string;
+  data: Record<string, any>;
+}
+
+export { HTTPConnection, Job, SFTPConnection, Enrichment };

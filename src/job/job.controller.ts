@@ -1,32 +1,35 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Param, Patch, Post, Req } from '@nestjs/common';
+import { Request } from 'express';
 import { Serialize } from '../interceptors/serialize.interceptor';
-import { CreateJobDto } from './dto/create-job.dto';
-import { JobResponseDto } from './dto/fetch-job.dto';
-import { JobService } from './job.service';
+import { CreateEnrichDataDto } from './dto/create-enrich-data.dto';
+import { CreatePullJobDto } from './dto/create-pull-job.dto';
+import { CreatePushJobDto } from './dto/create-push-job.dto';
+import { PullJobResponseDto } from './dto/fetch-pull-job.dto';
 import { UpdateJobStatusDto } from './dto/update-status.dto';
+import { JobService } from './job.service';
 
 @Controller('job')
-@Serialize(JobResponseDto)
 export class JobController {
   constructor(private jobService: JobService) {}
 
-  @Post('/create')
-  async createJob(@Body() job: CreateJobDto) {
-    return this.jobService.create(job);
+  @Post('/create/pull')
+  @Serialize(PullJobResponseDto)
+  async createPullJob(@Body() job: CreatePullJobDto) {
+    return this.jobService.createPull(job);
   }
 
-  @Get('/all')
-  async getAll(@Query('page') page = 1, @Query('limit') limit = 10) {
-    return this.jobService.findAll(Number(page), Number(limit));
+  @Post('/create/push')
+  async createPushJob(@Body() job: CreatePushJobDto) {
+    return this.jobService.createPush(job);
   }
 
-  @Get('/:id')
-  async getById(@Param('id') id: string) {
-    return await this.jobService.findOne(parseInt(id));
-  }
-
-  @Patch('/status/:id')
+  @Patch('/:id')
   async updateStatus(@Param('id') id: string, @Body() body: UpdateJobStatusDto) {
-    return await this.jobService.updateStatus(parseInt(id), body);
+    return await this.jobService.updateStatus(id, body);
+  }
+
+  @Post('/v1/enrich/*')
+  async getEnrich(@Req() req: Request, @Body() body: CreateEnrichDataDto) {
+    return await this.jobService.createEnrich(req, body);
   }
 }

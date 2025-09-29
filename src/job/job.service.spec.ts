@@ -10,6 +10,10 @@ jest.mock('bcrypt', () => ({
   hash: jest.fn(),
 }));
 
+jest.mock('uuid', () => ({
+  v4: jest.fn(() => 'asd13as-asd13sfgwg-123jbuqr4'),
+}));
+
 describe('JobService', () => {
   let service: JobService;
   let fakeKnex: any;
@@ -19,15 +23,11 @@ describe('JobService', () => {
 
   beforeEach(async () => {
     queryBuilder = {
-      select: jest.fn().mockReturnThis(),
-      limit: jest.fn().mockReturnThis(),
-      offset: jest.fn().mockReturnThis(),
-      orderBy: jest.fn().mockResolvedValue([{ id: 1, name: 'Job 1' }]),
-      count: jest.fn().mockResolvedValue([{ count: 1 }]),
+      orderBy: jest.fn().mockResolvedValue([{ id: 'asd13as-asd13sfgwg-123jbuqr4', name: 'Job 1' }]),
       where: jest.fn().mockReturnThis(),
-      first: jest.fn().mockResolvedValue({ id: 1, name: 'Job 1' }),
+      first: jest.fn().mockResolvedValue({ id: 'asd13as-asd13sfgwg-123jbuqr4', name: 'Job 1' }),
       insert: jest.fn().mockReturnThis(),
-      returning: jest.fn().mockResolvedValue([{ id: 99, name: 'Inserted Job' }]),
+      returning: jest.fn().mockResolvedValue([{ id: 'asd13as-asd13sfgwg-123jbuqr4', name: 'Inserted Job' }]),
     };
 
     fakeKnex = jest.fn().mockImplementation(() => queryBuilder);
@@ -60,7 +60,6 @@ describe('JobService', () => {
 
   it('should create HTTP job', async () => {
     const httpPayload = {
-      config_type: 'Pull',
       endpoint_name: 'Dummy',
       source_type: 'HTTP',
       description: 'Dummy Pull',
@@ -71,20 +70,20 @@ describe('JobService', () => {
       table_name: 'job',
     };
 
-    queryBuilder.returning.mockResolvedValueOnce([{ id: 1, name: 'Test Job' }]);
+    queryBuilder.returning.mockResolvedValueOnce([{ id: 'asd13as-asd13sfgwg-123jbuqr4', name: 'Test Job' }]);
 
-    const job = await service.create(httpPayload as any);
+    const job = await service.createPull(httpPayload as any);
 
     expect(bcrypt.hash).not.toHaveBeenCalled();
-    expect(queryBuilder.insert).toHaveBeenCalledWith(httpPayload);
-    expect(job).toEqual({ id: 1, name: 'Test Job' });
+    expect(job.id).toEqual('asd13as-asd13sfgwg-123jbuqr4');
+    expect(queryBuilder.insert).toHaveBeenCalledWith({ ...httpPayload, id: 'asd13as-asd13sfgwg-123jbuqr4' });
+    expect(job).toEqual({ id: 'asd13as-asd13sfgwg-123jbuqr4', name: 'Test Job' });
   });
 
   it('should hash password for SFTP job payload', async () => {
     (bcrypt.hash as jest.Mock).mockResolvedValue('hashed_pass');
 
     const sftpPayload = {
-      config_type: 'Pull',
       endpoint_name: 'SecureDummy',
       source_type: 'SFTP',
       description: 'SFTP Pull',
@@ -92,39 +91,28 @@ describe('JobService', () => {
       table_name: 'job',
     };
 
-    const result = await service.create(sftpPayload as any);
+    const result = await service.createPull(sftpPayload as any);
 
     expect(bcrypt.hash).toHaveBeenCalledWith('plain_pass', 10);
+    expect(result.id).toEqual('asd13as-asd13sfgwg-123jbuqr4');
     expect(queryBuilder.insert).toHaveBeenCalledWith({
       ...sftpPayload,
+      id: 'asd13as-asd13sfgwg-123jbuqr4',
       connection: { host: 'sftp.example.com', username: 'user1', password: 'hashed_pass' },
     });
-    expect(result).toEqual({ id: 99, name: 'Inserted Job' });
-  });
-
-  it('return jobs with pagination', async () => {
-    const jobs = await service.findAll(1, 10);
-
-    expect(fakeKnex).toHaveBeenCalledWith('job');
-    expect(queryBuilder.select).toHaveBeenCalledWith('*');
-    expect(queryBuilder.limit).toHaveBeenCalledWith(10);
-    expect(queryBuilder.offset).toHaveBeenCalledWith(0);
-    expect(queryBuilder.orderBy).toHaveBeenCalledWith('created_at', 'desc');
-    expect(queryBuilder.count).toHaveBeenCalledWith('* as count');
-
-    expect(jobs).toEqual([{ id: 1, name: 'Job 1' }]);
+    expect(result).toEqual({ id: 'asd13as-asd13sfgwg-123jbuqr4', name: 'Inserted Job' });
   });
 
   it('should return a existing job', async () => {
-    const job = await service.findOne(1);
+    const job = await service.findOnePull('asd13as-asd13sfgwg-123jbuqr4');
 
-    expect(queryBuilder.where).toHaveBeenCalledWith({ id: 1 });
+    expect(queryBuilder.where).toHaveBeenCalledWith({ id: 'asd13as-asd13sfgwg-123jbuqr4' });
     expect(queryBuilder.first).toHaveBeenCalled();
-    expect(job).toEqual({ id: 1, name: 'Job 1' });
+    expect(job).toEqual({ id: 'asd13as-asd13sfgwg-123jbuqr4', name: 'Job 1' });
   });
 
   it('should throw error if job does not exist', async () => {
     queryBuilder.first.mockResolvedValue(null);
-    await expect(service.findOne(99)).rejects.toThrow(NotFoundException);
+    await expect(service.findOnePull('asd13as-asd13sfgwg-123jbuqr4')).rejects.toThrow(NotFoundException);
   });
 });

@@ -1,6 +1,6 @@
-import { IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsObject, IsString, ValidateNested } from 'class-validator';
-import { AuthType, ConfigType, EncodingType, FileType, JobStatus, SourceType } from '../../utils/interfaces';
 import { Type } from 'class-transformer';
+import { IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsObject, IsString, ValidateNested } from 'class-validator';
+import { AuthType, EncodingType, FileType, JobStatus, SourceType } from '../../utils/interfaces';
 
 class HTTPConnectionDto {
   @IsString()
@@ -48,19 +48,18 @@ class FileSettingDto {
   encoding: EncodingType;
 }
 
-export class CreateJobDto {
+export class CreatePullJobDto {
   @IsString()
   @IsNotEmpty()
   endpoint_name: string;
 
   @IsNumber()
+  @IsNotEmpty()
   schedule_id: number;
 
   @IsEnum(SourceType)
+  @IsNotEmpty()
   source_type: SourceType;
-
-  @IsEnum(ConfigType)
-  config_type: ConfigType;
 
   @IsString()
   @IsNotEmpty()
