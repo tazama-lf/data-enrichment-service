@@ -1,5 +1,7 @@
 import * as crypto from 'crypto';
 import { CronTime } from 'cron';
+import { BadRequestException } from '@nestjs/common';
+import { RESERVED_KEYWORDS } from './constants';
 
 const IV_LENGTH = 16;
 
@@ -37,4 +39,20 @@ export function getNextTime(cronExp: string) {
   const cronTime = new CronTime(cronExp);
   const nextDate = cronTime.sendAt();
   return nextDate.toISO();
+}
+
+export function validateTableName(tableName: string): void {
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(tableName)) {
+    throw new BadRequestException(
+      `Invalid table name "${tableName}". Only letters, numbers, and underscores are allowed, and it must start with a letter or underscore.`,
+    );
+  }
+
+  if (tableName.length > 63) {
+    throw new BadRequestException(`Invalid table name "${tableName}". Must not exceed 63 characters.`);
+  }
+
+  if (RESERVED_KEYWORDS.has(tableName.toLowerCase())) {
+    throw new BadRequestException(`Invalid table name "${tableName}". It is a reserved SQL keyword.`);
+  }
 }

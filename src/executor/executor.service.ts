@@ -1,15 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { SchedulerRegistry } from '@nestjs/schedule';
+import { LoggerService } from '@tazama-lf/frms-coe-lib';
 import axios from 'axios';
 import { CronJob } from 'cron';
 import { parse } from 'csv-parse/sync';
 import knex, { Knex } from 'knex';
 import SFTPClient from 'ssh2-sftp-client';
 import { HTTPConnection, Job, SFTPConnection } from '../job/types/job-interfaces';
-import { EncodingType, FileType, SourceType } from '../utils/interfaces';
-import { LoggerService } from '@tazama-lf/frms-coe-lib';
-import { decrypt, getNextTime } from '../utils/helpers';
 import { Schedule } from '../scheduler/types/scheduler-interfaces';
+import { decrypt, getNextTime, validateTableName } from '../utils/helpers';
+import { EncodingType, FileType, SourceType } from '../utils/interfaces';
 
 @Injectable()
 export class ExecutorService {
@@ -26,8 +26,9 @@ export class ExecutorService {
     });
   }
 
-  async ensureTable(tableName: string, data?: any) {
+  async ensureTable(tableName: string, data?: any): Promise<void> {
     try {
+      validateTableName(tableName);
       const exists = await this.knex.schema.hasTable(tableName);
       if (!exists) {
         await this.knex.schema.createTable(tableName, (table) => {
@@ -40,7 +41,7 @@ export class ExecutorService {
       if (err.message.includes('already exists')) {
         this.loggerService.log(`Table ${tableName} already created, ignoring...`);
       } else {
-        throw err;
+        this.loggerService.error(err.message);
       }
     }
     if (data) {
