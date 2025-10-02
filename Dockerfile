@@ -1,88 +1,25 @@
 # SPDX-License-Identifier: Apache-2.0
-ARG BUILD_IMAGE=node:20-bullseye
-# ARG RUN_IMAGE=gcr.io/distroless/nodejs20-debian11:nonroot
 
-FROM ${BUILD_IMAGE} AS builder
-# LABEL stage=build
-# TS -> JS stage
+FROM node:22-alpine AS builder
 
-WORKDIR /home/app
-COPY ./src ./src
-COPY ./package*.json ./
-COPY ./tsconfig.json ./
-COPY ./knex ./knex
-# COPY .npmrc ./
-# ARG GH_TOKEN
+WORKDIR /app
 
-RUN npm ci --ignore-scripts
+COPY package*.json ./
+COPY tsconfig.json ./
+COPY .npmrc .npmrc ./
+RUN npm install
+COPY . .
+
 RUN npm run build
 
-# FROM ${BUILD_IMAGE} AS dep-resolver
-# LABEL stage=pre-prod
-# # To filter out dev dependencies from final build
+FROM node:22-alpine
+WORKDIR /app
 
-# COPY package*.json ./
-# COPY .npmrc ./
-# ARG GH_TOKEN
-# RUN npm ci --omit=dev --ignore-scripts
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY package*.json ./
+COPY tsconfig.json ./
 
-# FROM ${RUN_IMAGE} AS run-env
-# USER nonroot
+EXPOSE 3000
 
-# WORKDIR /home/app
-# COPY --from=dep-resolver /node_modules ./node_modules
-# COPY --from=builder /home/app/build ./build
-# COPY package.json ./
-# COPY deployment.yaml ./
-# COPY service.yaml ./
-
-# Turn down the verbosity to default level.
-ENV NPM_CONFIG_LOGLEVEL warn
-
-ENV FUNCTION_NAME=data-enrichment
-ENV NODE_ENV=production
-ENV MAX_CPU=
-
-# Apm
-ENV APM_ACTIVE=true
-ENV APM_URL=http://apm-server.development.svc.cluster.local:8200/
-ENV APM_SECRET_TOKEN=
-ENV APM_SERVICE_NAME=data-enrichment
-
-# Logstash
-ENV LOGSTASH_LEVEL='info'
-
-# Database
-ENV CONFIGURATION_DATABASE_URL=
-ENV CONFIGURATION_DATABASE=configuration
-ENV CONFIGURATION_DATABASE_USER=root
-ENV CONFIGURATION_DATABASE_PASSWORD=
-ENV CONFIGURATION_DATABASE_CERT_PATH=
-
-# Redis
-ENV REDIS_DATABASE=0
-ENV REDIS_AUTH=
-ENV REDIS_SERVERS=
-ENV REDIS_IS_CLUSTER=
-ENV CACHETTL=300
-ENV DISTRIBUTED_CACHETTL=300
-ENV DISTRIBUTED_CACHE_ENABLED=true
-
-# Node Cache
-ENV LOCAL_CACHETTL=300
-ENV LOCAL_CACHE_ENABLED=true
-
-# Nats
-ENV STARTUP_TYPE=nats
-ENV SERVER_URL=0.0.0.0:4222
-ENV PRODUCER_STREAM=RuleRequest
-ENV CONSUMER_STREAM=data-enrichment
-ENV STREAM_SUBJECT=data-enrichment
-ENV ACK_POLICY=Explicit
-ENV PRODUCER_STORAGE=File
-ENV PRODUCER_RETENTION_POLICY=Workqueue
-
-ENV SIDECAR_HOST=0.0.0.0:5000
-
-# Execute watchdog command
-CMD ["node","dist/main.js"]
+CMD ["npm", "run", "start:dev"]
