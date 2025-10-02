@@ -82,7 +82,7 @@ describe('JobService', () => {
       endpoint_name: 'SecureDummy',
       source_type: 'SFTP',
       description: 'SFTP Pull',
-      connection: { host: 'sftp.example.com', username: 'user1', password: 'plain_pass' },
+      connection: { host: 'sftp.example.com', username: 'user1', password: 'hashed_pass' },
       table_name: 'job',
     };
 

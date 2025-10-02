@@ -6,10 +6,10 @@ import { CronJob } from 'cron';
 import { parse } from 'csv-parse/sync';
 import knex, { Knex } from 'knex';
 import SFTPClient from 'ssh2-sftp-client';
-import { HTTPConnection, Job, SFTPConnection } from '../job/types/job-interfaces';
+import { FileSettings, HTTPConnection, Job, SFTPConnection } from '../job/types/job-interfaces';
 import { Schedule } from '../scheduler/types/scheduler-interfaces';
 import { decrypt, getNextTime, validateTableName } from '../utils/helpers';
-import { EncodingType, FileType, SourceType } from '../utils/interfaces';
+import { AuthType, EncodingType, FileType, SourceType } from '../utils/interfaces';
 
 @Injectable()
 export class ExecutorService {
@@ -50,11 +50,11 @@ export class ExecutorService {
     return;
   }
 
-  async insertData(tableName: string, data: any) {
-    await this.knex(tableName).insert({ data }).returning('*');
+  async insertData(tableName: string, data: any): Promise<void> {
+    await this.knex(tableName).insert({ data });
   }
 
-  private async handleFailure(job: Job, jobKey: string) {
+  private async handleFailure(job: Job, jobKey: string): Promise<void> {
     const currentFailures = this.failureCounters.get(jobKey) ?? 0;
     const newFailures = currentFailures + 1;
     this.failureCounters.set(jobKey, newFailures);
@@ -66,98 +66,16 @@ export class ExecutorService {
     }
   }
 
-  private async run(job: Job, jobKey: string) {
+  private async run(job: Job, jobKey: string): Promise<void> {
     try {
-      const connection = job.connection;
       if (job.source_type === SourceType.HTTP) {
-        const httpCon = connection as HTTPConnection;
-        const { data, status } = await axios({ method: 'get', url: httpCon.url, headers: httpCon.headers });
-        if (typeof data === 'object' && status === 200) {
-          await this.ensureTable(job.table_name, data.users[0]);
-          this.failureCounters.set(jobKey, 0);
-        } else {
-          await this.handleFailure(job, jobKey);
-        }
+        await this.handleHttpJob(job, jobKey);
       } else if (job.source_type === SourceType.SFTP) {
-        const sftpCon = connection as SFTPConnection;
-        const file = job.file;
-        const sftp = new SFTPClient();
-        try {
-          await sftp.connect({
-            host: sftpCon.host,
-            port: sftpCon.port,
-            username: sftpCon.user_name,
-            password: decrypt(sftpCon.password),
-          });
-
-          const filePath = file?.path;
-          if (!filePath) {
-            this.loggerService.error('File path not provided in job config');
-            throw new Error('File path not provided in job config');
-          }
-
-          const fileExists = await sftp.exists(filePath);
-          if (!fileExists) {
-            this.loggerService.error('File path not found on SFTP server');
-            throw new Error(`File ${filePath} not found on SFTP server`);
-          }
-
-          const fileContent = await sftp.get(filePath);
-          const buffer = Buffer.isBuffer(fileContent) ? fileContent : Buffer.from(fileContent.toString());
-
-          const encoding: BufferEncoding = (file.encoding?.toLowerCase() as BufferEncoding) || EncodingType.UTF8;
-
-          const rawContent = buffer.toString(encoding);
-
-          let records: any[] = [];
-
-          switch (file.file_type) {
-            case FileType.CSV:
-              records = parse(rawContent, {
-                delimiter: file.delimiter || ',',
-                columns: file.header,
-                skip_empty_lines: true,
-                trim: true,
-              });
-              break;
-
-            case FileType.TSV:
-              records = parse(rawContent, {
-                delimiter: '\t',
-                columns: file.header,
-                skip_empty_lines: true,
-                trim: true,
-              });
-              break;
-
-            case FileType.JSON:
-              try {
-                const parsed = JSON.parse(rawContent);
-                records = Array.isArray(parsed) ? parsed : [parsed];
-              } catch (error) {
-                this.loggerService.error(`Unable to parse JSON :  ${error.message}`);
-              }
-              break;
-
-            default:
-              throw new Error('Unsupported file type');
-          }
-
-          for (const row of records) {
-            await this.ensureTable(job.table_name, row);
-          }
-
-          this.failureCounters.set(jobKey, 0);
-        } catch (error) {
-          this.loggerService.error(`SFTP error :  ${error.message}`);
-          await this.handleFailure(job, jobKey);
-        } finally {
-          sftp.end();
-        }
+        await this.handleSftpJob(job, jobKey);
       }
     } catch (error) {
       this.loggerService.error(`Failed to execute job : ${error.message}`);
-      this.handleFailure(job, jobKey);
+      await this.handleFailure(job, jobKey);
     } finally {
       await this.knex<Schedule>('schedule')
         .where({ id: job.schedule.id })
@@ -165,7 +83,92 @@ export class ExecutorService {
     }
   }
 
-  addCronJob(job: Job) {
+  private async handleHttpJob(job: Job, jobKey: string): Promise<void> {
+    const httpCon = job.connection as HTTPConnection;
+    const { data, status } = await axios.get(httpCon.url, { headers: httpCon.headers });
+
+    if (status === 200 && typeof data === 'object') {
+      await this.ensureTable(job.table_name, data.users[0]);
+      this.failureCounters.set(jobKey, 0);
+    } else {
+      await this.handleFailure(job, jobKey);
+    }
+  }
+
+  private async handleSftpJob(job: Job, jobKey: string): Promise<void> {
+    const sftpCon = job.connection as SFTPConnection;
+    const file = job.file;
+    const sftp = new SFTPClient();
+
+    try {
+      if (sftpCon.auth_type === AuthType.USERNAME_PASSWORD) {
+        await sftp.connect({
+          host: sftpCon.host,
+          port: sftpCon.port,
+          username: sftpCon.user_name,
+          password: decrypt(sftpCon.password),
+        });
+      } else {
+        await sftp.connect({
+          host: sftpCon.host,
+          port: sftpCon.port,
+          username: sftpCon.user_name,
+          privateKey: decrypt(sftpCon.private_key),
+        });
+      }
+      if (!file?.path) throw new Error('File path not provided in job config');
+
+      const fileExists = await sftp.exists(file.path);
+      if (!fileExists) throw new Error(`File ${file.path} not found on SFTP server`);
+
+      const rawContent = await this.readSftpFile(sftp, file);
+      const records = this.parseFile(rawContent, file);
+
+      for (const row of records) {
+        await this.ensureTable(job.table_name, row);
+      }
+
+      this.failureCounters.set(jobKey, 0);
+    } catch (error: any) {
+      this.loggerService.error(`SFTP error: ${error.message}`);
+      await this.handleFailure(job, jobKey);
+    } finally {
+      sftp.end();
+    }
+  }
+
+  private async readSftpFile(sftp: SFTPClient, file: FileSettings): Promise<string> {
+    const fileContent = await sftp.get(file.path);
+    const buffer = Buffer.isBuffer(fileContent) ? fileContent : Buffer.from(fileContent.toString());
+
+    const encoding: BufferEncoding = (file.encoding?.toLowerCase() as BufferEncoding) || EncodingType.UTF8;
+    return buffer.toString(encoding);
+  }
+
+  private parseFile(content: string, file: FileSettings): string[][] | Record<string, unknown>[] {
+    switch (file.file_type) {
+      case FileType.CSV:
+      case FileType.TSV:
+        return parse(content, {
+          delimiter: file.file_type === FileType.CSV ? (file.delimiter ?? ',') : '\t',
+          columns: file.header,
+          skip_empty_lines: true,
+          trim: true,
+        });
+      case FileType.JSON:
+        try {
+          const parsed = JSON.parse(content);
+          return Array.isArray(parsed) ? parsed : [parsed];
+        } catch (error: any) {
+          this.loggerService.error(`Unable to parse JSON: ${error.message}`);
+          return [];
+        }
+      default:
+        throw new Error('Unsupported file type');
+    }
+  }
+
+  addCronJob(job: Job): void {
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const jobKey = `job-${job.id}-schedule-${job.schedule.id}`;
 

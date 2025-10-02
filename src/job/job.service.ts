@@ -7,7 +7,7 @@ import { v4 } from 'uuid';
 import { ExecutorService } from '../executor/executor.service';
 import { SchedulerService } from '../scheduler/scheduler.service';
 import { encrypt } from '../utils/helpers';
-import { JobStatus, SourceType } from '../utils/interfaces';
+import { AuthType, JobStatus, SourceType } from '../utils/interfaces';
 import { CreateEnrichDataDto } from './dto/create-enrich-data.dto';
 import { CreatePullJobDto, SFTPConnectionDto } from './dto/create-pull-job.dto';
 import { CreatePushJobDto } from './dto/create-push-job.dto';
@@ -91,10 +91,15 @@ export class JobService {
 
       if (job.source_type === SourceType.SFTP) {
         const sftpConn = connection as SFTPConnectionDto;
-        if (sftpConn.password) {
+        if (sftpConn.auth_type === AuthType.USERNAME_PASSWORD && sftpConn.password) {
           connection = {
             ...sftpConn,
             password: encrypt(sftpConn.password),
+          };
+        } else if (sftpConn.private_key) {
+          connection = {
+            ...sftpConn,
+            private_key: encrypt(sftpConn.private_key),
           };
         }
       }

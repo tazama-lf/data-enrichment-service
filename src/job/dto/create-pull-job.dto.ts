@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsObject, IsString, ValidateNested } from 'class-validator';
+import { IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsObject, IsString, ValidateIf, ValidateNested } from 'class-validator';
 import { AuthType, EncodingType, FileType, JobStatus, SourceType } from '../../utils/interfaces';
 
 class HTTPConnectionDto {
@@ -28,7 +28,13 @@ export class SFTPConnectionDto {
 
   @IsString()
   @IsNotEmpty()
+  @ValidateIf((o) => o.auth_type === AuthType.USERNAME_PASSWORD)
   password: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @ValidateIf((o) => o.auth_type === AuthType.PRIVATE_KEY)
+  private_key: string;
 }
 
 class FileSettingDto {

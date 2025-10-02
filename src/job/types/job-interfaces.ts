@@ -1,5 +1,5 @@
 import { Schedule } from '../../scheduler/types/scheduler-interfaces';
-import { AuthType, EncodingType, FileType, JobStatus, SourceType } from '../../utils/interfaces';
+import { AuthType, FileType, JobStatus, SourceType } from '../../utils/interfaces';
 
 interface HTTPConnection {
   url: string;
@@ -12,15 +12,13 @@ interface SFTPConnection {
   auth_type: AuthType;
   user_name: string;
   password?: string;
+  private_key?: string;
 }
 
-interface FileSettings {
-  path: string;
-  file_type: FileType;
-  delimiter: string;
-  header: boolean;
-  encoding: EncodingType;
-}
+type FileSettings =
+  | { file_type: FileType.CSV; delimiter?: string; header?: boolean | string[]; path: string; encoding?: string }
+  | { file_type: FileType.TSV; header?: boolean | string[]; path: string; encoding?: string }
+  | { file_type: FileType.JSON; path: string; encoding?: string };
 
 interface Job {
   id: string;
@@ -44,4 +42,4 @@ interface Enrichment {
   data: Record<string, any>;
 }
 
-export { HTTPConnection, Job, SFTPConnection, Enrichment };
+export { Enrichment, FileSettings, HTTPConnection, Job, SFTPConnection };
