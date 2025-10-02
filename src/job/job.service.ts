@@ -1,5 +1,4 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { createHash } from 'crypto';
 import { Request } from 'express';
 import { Knex } from 'knex';
@@ -18,26 +17,23 @@ import { Enrichment, Job } from './types/job-interfaces';
 export class JobService {
   constructor(
     @Inject('KNEX_CONNECTION') private readonly knex: Knex,
-    private readonly configService: ConfigService,
     private readonly scheduleService: SchedulerService,
     private readonly executorService: ExecutorService,
   ) {}
 
-  async onModuleInit() {
+  async onModuleInit(): Promise<void> {
     const jobs = await this.findAllPull();
-    if (jobs) {
-      jobs.filter((opt) => opt.job_status === JobStatus.INPROGRESS).forEach((job) => void this.execute(job.id));
-    }
+    jobs.filter((opt) => opt.job_status === JobStatus.INPROGRESS).forEach((job) => void this.execute(job.id));
   }
 
-  async createPush(job: CreatePushJobDto) {
+  async createPush(job: CreatePushJobDto): Promise<Job> {
     if (!job.path.startsWith('/v1/enrich/')) {
       throw new BadRequestException(`Invalid path format. Path must start with "/v1/enrich/". Received: "${job.path}"`);
     }
     const existing = await this.knex('endpoints').where({ path: job.path }).first();
 
     if (existing) {
-      throw new Error(`Endpoint "${job.path}" already exists.`);
+      throw new BadRequestException(`Endpoint "${job.path}" already exists.`);
     }
     const [newJob] = await this.knex('endpoints').insert(job).returning('*');
 
@@ -45,47 +41,32 @@ export class JobService {
     return newJob;
   }
 
-  async createEnrich(req: Request, body: CreateEnrichDataDto) {
+  async createEnrich(req: Request, body: CreateEnrichDataDto): Promise<Enrichment[]> {
     const contentType = req.headers['content-type'];
     if (!contentType?.includes('application/json')) {
       throw new BadRequestException('Content-Type must be application/json');
     }
+
     const cleanedPath = req.path.replace(/^\/job/, '');
-
     const existing = await this.knex('endpoints').where({ path: cleanedPath }).first();
-
     if (!existing) {
       throw new NotFoundException('Invalid Path');
     }
 
     const correlation_id = v4();
     const tenant_id = Math.round(Math.random() * 9999).toString();
-    let payload: any[] = [];
-
-    if (Array.isArray(body.data)) {
-      payload = body.data.map((item) => ({
-        tenant_id,
-        correlation_id,
-        data: item,
-        endpoint_id: existing.id,
-        checksum: createHash('sha256').update(JSON.stringify(item)).digest('hex'),
-      }));
-    } else {
-      payload = [
-        {
-          tenant_id,
-          correlation_id,
-          data: body.data,
-          endpoint_id: existing.id,
-          checksum: createHash('sha256').update(JSON.stringify(body.data)).digest('hex'),
-        },
-      ];
-    }
+    const payload: Enrichment[] = (Array.isArray(body.data) ? body.data : [body.data]).map((item) => ({
+      tenant_id,
+      correlation_id,
+      data: item,
+      endpoint_id: existing.id,
+      checksum: createHash('sha256').update(JSON.stringify(item)).digest('hex'),
+    }));
 
     return await this.knex<Enrichment>('enrichment').insert(payload).returning('*');
   }
 
-  async createPull(job: CreatePullJobDto) {
+  async createPull(job: CreatePullJobDto): Promise<Job> {
     try {
       let connection = job.connection;
 
@@ -118,12 +99,12 @@ export class JobService {
     }
   }
 
-  async findAllPull() {
+  async findAllPull(): Promise<Job[]> {
     const data = await this.knex('job').select('*').orderBy('created_at', 'desc');
     return data;
   }
 
-  async findOnePull(id: string) {
+  async findOnePull(id: string): Promise<Job> {
     const job = await this.knex<Job>('job').where({ id }).first();
 
     if (!job) {
@@ -132,17 +113,17 @@ export class JobService {
     return job;
   }
 
-  async execute(id: string) {
+  async execute(id: string): Promise<void> {
     const res = await this.findOnePull(id);
     const schedule = await this.scheduleService.findOne(res.schedule_id);
     this.executorService.addCronJob({ ...res, schedule });
   }
 
-  async updateStatus(id: string, job: UpdateJobStatusDto) {
+  async updateStatus(id: string, job: UpdateJobStatusDto): Promise<void> {
     await this.knex<Job>('job').where({ id }).update({ job_status: job.job_status });
 
     if (job.job_status === JobStatus.INPROGRESS) {
-      this.execute(id);
+      await this.execute(id);
     }
   }
 }

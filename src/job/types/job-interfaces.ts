@@ -34,7 +34,7 @@ interface Job {
 }
 
 interface Enrichment {
-  id: number;
+  id?: number;
   tenant_id: string;
   endpoint_id: number;
   correlation_id: string;

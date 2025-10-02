@@ -8,13 +8,13 @@ import { Schedule } from './types/scheduler-interfaces';
 export class SchedulerService {
   constructor(@Inject('KNEX_CONNECTION') private readonly knex: Knex) {}
 
-  async create(schedule: CreateScheduleJobDto) {
+  async create(schedule: CreateScheduleJobDto): Promise<Schedule> {
     const [result] = await this.knex('schedule').insert(schedule).returning('*');
 
     return result;
   }
 
-  async findAll(page = 1, limit = 10) {
+  async findAll(page = 1, limit = 10): Promise<Schedule[]> {
     const offset = (page - 1) * limit;
     const [data] = await Promise.all([
       this.knex('schedule').select('*').limit(limit).offset(offset),
@@ -24,19 +24,16 @@ export class SchedulerService {
     return data;
   }
 
-  async findOne(id: number) {
+  async findOne(id: number): Promise<Schedule> {
     const schedule = await this.knex<Schedule>('schedule').where({ id }).first();
     if (!schedule) {
-      throw new NotFoundException('Configuration Not Found');
+      throw new NotFoundException(`Configuration with id ${id} not found`);
     }
     return schedule;
   }
 
-  async remove(id: number) {
-    const schedule = await this.knex<Schedule>('schedule').where({ id }).first();
-    if (!schedule) {
-      throw new NotFoundException('Configuration Not Found');
-    }
+  async remove(id: number): Promise<{ success: boolean; message: string }> {
+    await this.findOne(id);
     const res = await this.knex<Schedule>('schedule').where('id', id).del();
     if (res) {
       return {
@@ -48,11 +45,8 @@ export class SchedulerService {
     }
   }
 
-  async update(id: number, attr: Partial<ScheduleDto>) {
-    const schedule = await this.findOne(id);
-    if (!schedule) {
-      throw new NotFoundException('Configuration Not Found');
-    }
+  async update(id: number, attr: Partial<ScheduleDto>): Promise<Schedule> {
+    await this.findOne(id);
     await this.knex<Schedule>('schedule').where({ id }).update(attr);
 
     return this.findOne(id);
