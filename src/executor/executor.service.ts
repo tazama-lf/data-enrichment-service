@@ -52,25 +52,37 @@ export class ExecutorService {
 
   async updateTable(table_name: string, mode: IngestMode, data: any): Promise<void> {
     await this.ensureTable(table_name);
-    const arr = Array.isArray(data) ? data : Object.values(data).flat();
 
-    if (!arr.length) return;
+    let rows: { id: string; data: string }[] = [];
 
-    if (mode === IngestMode.APPEND) {
-      const rows = arr.map((item) => ({
+    if (Array.isArray(data)) {
+      rows = data?.map((item) => ({
         id: v4(),
         data: JSON.stringify(item),
       }));
+    } else if (typeof data === 'object' && data !== null) {
+      for (const val of Object.values(data)) {
+        if (Array.isArray(val)) {
+          rows.push(
+            ...val.map((item) => ({
+              id: v4(),
+              data: JSON.stringify(item),
+            })),
+          );
+        } else {
+          rows.push({
+            id: v4(),
+            data: JSON.stringify(val),
+          });
+        }
+      }
+    }
+
+    if (mode === IngestMode.APPEND) {
       await this.knex(table_name).insert(rows);
     } else if (mode === IngestMode.REPLACE) {
       await this.knex.transaction(async (trx) => {
         await trx(table_name).del();
-
-        const rows = arr.map((item) => ({
-          id: v4(),
-          data: JSON.stringify(item),
-        }));
-
         await trx(table_name).insert(rows);
       });
     }
@@ -141,10 +153,7 @@ export class ExecutorService {
 
       const rawContent = await this.readSftpFile(sftp, file);
       const records = this.parseFile(rawContent, file);
-
-      for (const row of records) {
-        await this.updateTable(job.table_name, job.mode, row);
-      }
+      await this.updateTable(job.table_name, job.mode, records);
 
       this.failureCounters.set(jobKey, 0);
     } catch (error: any) {
@@ -160,6 +169,7 @@ export class ExecutorService {
     const buffer = Buffer.isBuffer(fileContent) ? fileContent : Buffer.from(fileContent.toString());
 
     const encoding: BufferEncoding = (file.encoding?.toLowerCase() as BufferEncoding) || EncodingType.UTF8;
+
     return buffer.toString(encoding);
   }
 
