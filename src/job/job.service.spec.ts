@@ -5,12 +5,11 @@ import { ExecutorService } from '../executor/executor.service';
 import { SchedulerService } from '../scheduler/scheduler.service';
 import * as cryptoUtils from '../utils/helpers';
 import { JobService } from './job.service';
+import { LoggerService } from '@tazama-lf/frms-coe-lib';
 
 jest.mock('uuid', () => ({
   v4: jest.fn(() => 'asd13as-asd13sfgwg-123jbuqr4'),
 }));
-
-jest.spyOn(cryptoUtils, 'encrypt').mockImplementation(() => 'hashed_pass');
 
 describe('JobService', () => {
   let service: JobService;
@@ -28,6 +27,13 @@ describe('JobService', () => {
       returning: jest.fn().mockResolvedValue([{ id: 'asd13as-asd13sfgwg-123jbuqr4', name: 'Inserted Job' }]),
     };
 
+    jest.spyOn(cryptoUtils, 'encrypt').mockImplementation(() => 'hashed_pass');
+
+    fakeExecutorService = {
+      tableExist: jest.fn().mockResolvedValue(false),
+      ensureTable: jest.fn().mockResolvedValue(true),
+    } as any;
+
     fakeKnex = jest.fn().mockImplementation(() => queryBuilder);
 
     const module: TestingModule = await Test.createTestingModule({
@@ -36,6 +42,7 @@ describe('JobService', () => {
           provide: ConfigService,
           useValue: { get: jest.fn().mockReturnValue('10') },
         },
+        { provide: LoggerService, useValue: { error: jest.fn(), log: jest.fn() } },
         JobService,
         { provide: ExecutorService, useValue: fakeExecutorService },
         {

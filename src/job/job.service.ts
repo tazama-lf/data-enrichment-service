@@ -5,13 +5,14 @@ import { Knex } from 'knex';
 import { v4 } from 'uuid';
 import { ExecutorService } from '../executor/executor.service';
 import { SchedulerService } from '../scheduler/scheduler.service';
-import { encrypt } from '../utils/helpers';
+import { encrypt, validateTableName } from '../utils/helpers';
 import { AuthType, JobStatus, SourceType } from '../utils/interfaces';
 import { CreateEnrichDataDto } from './dto/create-enrich-data.dto';
 import { CreatePullJobDto, SFTPConnectionDto } from './dto/create-pull-job.dto';
 import { CreatePushJobDto } from './dto/create-push-job.dto';
 import { UpdateJobStatusDto } from './dto/update-status.dto';
 import { Enrichment, Job } from './types/job-interfaces';
+import { LoggerService } from '@tazama-lf/frms-coe-lib';
 
 @Injectable()
 export class JobService {
@@ -19,6 +20,7 @@ export class JobService {
     @Inject('KNEX_CONNECTION') private readonly knex: Knex,
     private readonly scheduleService: SchedulerService,
     private readonly executorService: ExecutorService,
+    private readonly loggerService: LoggerService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -26,19 +28,34 @@ export class JobService {
     jobs.filter((opt) => opt.job_status === JobStatus.INPROGRESS).forEach((job) => void this.execute(job.id));
   }
 
+  async validateExisting(table_name: string): Promise<void> {
+    validateTableName(table_name);
+    const exists =
+      (await this.executorService.tableExist(table_name)) && !!(await this.knex('job').where({ table_name: table_name }).first());
+    if (exists) {
+      throw new BadRequestException('Table Already Exists');
+    }
+  }
+
   async createPush(job: CreatePushJobDto): Promise<Job> {
-    if (!job.path.startsWith('/v1/enrich/')) {
-      throw new BadRequestException(`Invalid path format. Path must start with "/v1/enrich/". Received: "${job.path}"`);
-    }
-    const existing = await this.knex('endpoints').where({ path: job.path }).first();
+    try {
+      await this.validateExisting(job.table_name);
+      if (!job.path.startsWith('/v1/enrich/')) {
+        throw new BadRequestException(`Invalid path format. Path must start with "/v1/enrich/". Received: "${job.path}"`);
+      }
+      const existing = await this.knex('endpoints').where({ path: job.path }).first();
 
-    if (existing) {
-      throw new BadRequestException(`Endpoint "${job.path}" already exists.`);
-    }
-    const [newJob] = await this.knex('endpoints').insert(job).returning('*');
+      if (existing) {
+        throw new BadRequestException(`Endpoint "${job.path}" already exists.`);
+      }
+      const [newJob] = await this.knex('endpoints').insert(job).returning('*');
 
-    await this.executorService.ensureTable(newJob.table_name);
-    return newJob;
+      await this.executorService.ensureTable(newJob.table_name);
+      return newJob;
+    } catch (err) {
+      this.loggerService.error(err.message);
+      throw new BadRequestException(err.message);
+    }
   }
 
   async createEnrich(req: Request, body: CreateEnrichDataDto): Promise<Enrichment[]> {
@@ -68,8 +85,8 @@ export class JobService {
 
   async createPull(job: CreatePullJobDto): Promise<Job> {
     try {
+      this.validateExisting(job.table_name);
       let connection = job.connection;
-
       if (job.source_type === SourceType.SFTP) {
         const sftpConn = connection as SFTPConnectionDto;
         if (sftpConn.auth_type === AuthType.USERNAME_PASSWORD && sftpConn.password) {
@@ -120,6 +137,7 @@ export class JobService {
   }
 
   async updateStatus(id: string, job: UpdateJobStatusDto): Promise<void> {
+    await this.findOnePull(id);
     await this.knex<Job>('job').where({ id }).update({ job_status: job.job_status });
 
     if (job.job_status === JobStatus.INPROGRESS) {

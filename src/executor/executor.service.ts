@@ -7,9 +7,9 @@ import { parse } from 'csv-parse/sync';
 import knex, { Knex } from 'knex';
 import SFTPClient from 'ssh2-sftp-client';
 import { FileSettings, HTTPConnection, Job, SFTPConnection } from '../job/types/job-interfaces';
-import { Schedule } from '../scheduler/types/scheduler-interfaces';
-import { decrypt, getNextTime, validateTableName } from '../utils/helpers';
-import { AuthType, EncodingType, FileType, SourceType } from '../utils/interfaces';
+import { decrypt } from '../utils/helpers';
+import { AuthType, EncodingType, FileType, IngestMode, SourceType } from '../utils/interfaces';
+import { v4 } from 'uuid';
 
 @Injectable()
 export class ExecutorService {
@@ -26,15 +26,14 @@ export class ExecutorService {
     });
   }
 
-  async ensureTable(tableName: string, data?: any): Promise<void> {
+  async ensureTable(tableName: string): Promise<void> {
     try {
-      validateTableName(tableName);
-      const exists = await this.knex.schema.hasTable(tableName);
+      const exists = await this.tableExist(tableName);
       if (!exists) {
         await this.knex.schema.createTable(tableName, (table) => {
-          table.increments('id').primary();
-          table.jsonb('data').notNullable();
-          table.timestamps(true, true);
+          table.string('id').notNullable();
+          table.json('data').notNullable();
+          table.timestamp('created_at').defaultTo(this.knex.fn.now());
         });
       }
     } catch (err: any) {
@@ -44,14 +43,37 @@ export class ExecutorService {
         this.loggerService.error(err.message);
       }
     }
-    if (data) {
-      this.insertData(tableName, data);
-    }
     return;
   }
 
-  async insertData(tableName: string, data: any): Promise<void> {
-    await this.knex(tableName).insert({ data });
+  async tableExist(tableName: string): Promise<boolean> {
+    return this.knex.schema.hasTable(tableName.trim().toLowerCase());
+  }
+
+  async updateTable(table_name: string, mode: IngestMode, data: any): Promise<void> {
+    await this.ensureTable(table_name);
+    const arr = Array.isArray(data) ? data : Object.values(data).flat();
+
+    if (!arr.length) return;
+
+    if (mode === IngestMode.APPEND) {
+      const rows = arr.map((item) => ({
+        id: v4(),
+        data: JSON.stringify(item),
+      }));
+      await this.knex(table_name).insert(rows);
+    } else if (mode === IngestMode.REPLACE) {
+      await this.knex.transaction(async (trx) => {
+        await trx(table_name).del();
+
+        const rows = arr.map((item) => ({
+          id: v4(),
+          data: JSON.stringify(item),
+        }));
+
+        await trx(table_name).insert(rows);
+      });
+    }
   }
 
   private async handleFailure(job: Job, jobKey: string): Promise<void> {
@@ -76,10 +98,6 @@ export class ExecutorService {
     } catch (error) {
       this.loggerService.error(`Failed to execute job : ${error.message}`);
       await this.handleFailure(job, jobKey);
-    } finally {
-      await this.knex<Schedule>('schedule')
-        .where({ id: job.schedule.id })
-        .update({ next_time: getNextTime(job.schedule.cron) });
     }
   }
 
@@ -88,7 +106,7 @@ export class ExecutorService {
     const { data, status } = await axios.get(httpCon.url, { headers: httpCon.headers });
 
     if (status === 200 && typeof data === 'object') {
-      await this.ensureTable(job.table_name, data.users[0]);
+      await this.updateTable(job.table_name, job.mode, data);
       this.failureCounters.set(jobKey, 0);
     } else {
       await this.handleFailure(job, jobKey);
@@ -125,7 +143,7 @@ export class ExecutorService {
       const records = this.parseFile(rawContent, file);
 
       for (const row of records) {
-        await this.ensureTable(job.table_name, row);
+        await this.updateTable(job.table_name, job.mode, row);
       }
 
       this.failureCounters.set(jobKey, 0);

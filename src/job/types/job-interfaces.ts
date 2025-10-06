@@ -1,5 +1,5 @@
 import { Schedule } from '../../scheduler/types/scheduler-interfaces';
-import { AuthType, FileType, JobStatus, SourceType } from '../../utils/interfaces';
+import { AuthType, FileType, IngestMode, JobStatus, SourceType } from '../../utils/interfaces';
 
 interface HTTPConnection {
   url: string;
@@ -30,6 +30,7 @@ interface Job {
   file: FileSettings;
   table_name: string;
   job_status: JobStatus;
+  mode?: IngestMode;
   schedule?: Schedule;
 }
 

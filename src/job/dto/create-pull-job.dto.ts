@@ -1,6 +1,6 @@
 import { Type } from 'class-transformer';
 import { IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsObject, IsString, ValidateIf, ValidateNested } from 'class-validator';
-import { AuthType, EncodingType, FileType, JobStatus, SourceType } from '../../utils/interfaces';
+import { AuthType, EncodingType, FileType, IngestMode, JobStatus, SourceType } from '../../utils/interfaces';
 
 class HTTPConnectionDto {
   @IsString()
@@ -97,6 +97,9 @@ export class CreatePullJobDto {
   @IsString()
   @IsNotEmpty()
   table_name: string;
+
+  @IsEnum(IngestMode)
+  mode: IngestMode = IngestMode.APPEND;
 
   @IsEnum(JobStatus)
   job_status: JobStatus = JobStatus.PENDING;
