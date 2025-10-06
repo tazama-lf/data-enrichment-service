@@ -86,6 +86,12 @@ export class JobService {
   async createPull(job: CreatePullJobDto): Promise<Job> {
     try {
       this.validateExisting(job.table_name);
+
+      const exist = await this.knex('schedule').where({ id: job.schedule_id }).first();
+      if (!exist) {
+        throw new BadRequestException(`Schedule Id of ${job.schedule_id} not found`);
+      }
+
       let connection = job.connection;
       if (job.source_type === SourceType.SFTP) {
         const sftpConn = connection as SFTPConnectionDto;
