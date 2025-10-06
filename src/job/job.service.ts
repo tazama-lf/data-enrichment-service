@@ -31,8 +31,9 @@ export class JobService {
   async validateExisting(table_name: string): Promise<void> {
     validateTableName(table_name);
     const exists =
-      (await this.executorService.tableExist(table_name)) && !!(await this.knex('job').where({ table_name: table_name }).first());
+      (await this.executorService.tableExist(table_name)) || (await this.knex('job').where({ table_name: table_name }).first());
     if (exists) {
+      this.loggerService.error('Table Already Exists');
       throw new BadRequestException('Table Already Exists');
     }
   }
@@ -48,7 +49,10 @@ export class JobService {
       if (existing) {
         throw new BadRequestException(`Endpoint "${job.path}" already exists.`);
       }
-      const [newJob] = await this.knex('endpoints').insert(job).returning('*');
+
+      const [newJob] = await this.knex('endpoints')
+        .insert({ ...job, id: v4() })
+        .returning('*');
 
       await this.executorService.ensureTable(newJob.table_name);
       return newJob;
@@ -58,7 +62,7 @@ export class JobService {
     }
   }
 
-  async createEnrich(req: Request, body: CreateEnrichDataDto): Promise<Enrichment[]> {
+  async createEnrich(req: Request, body: CreateEnrichDataDto): Promise<{ message: string; status: number }> {
     const contentType = req.headers['content-type'];
     if (!contentType?.includes('application/json')) {
       throw new BadRequestException('Content-Type must be application/json');
@@ -80,12 +84,17 @@ export class JobService {
       checksum: createHash('sha256').update(JSON.stringify(item)).digest('hex'),
     }));
 
-    return await this.knex<Enrichment>('enrichment').insert(payload).returning('*');
+    await this.executorService.updateTable(existing.table_name, existing.mode, payload);
+
+    return {
+      message: 'Data Enriched Successfully',
+      status: 200,
+    };
   }
 
   async createPull(job: CreatePullJobDto): Promise<Job> {
     try {
-      this.validateExisting(job.table_name);
+      await this.validateExisting(job.table_name);
 
       const exist = await this.knex('schedule').where({ id: job.schedule_id }).first();
       if (!exist) {
@@ -131,6 +140,7 @@ export class JobService {
     const job = await this.knex<Job>('job').where({ id }).first();
 
     if (!job) {
+      this.loggerService.error(`Job with ${id} not Found`);
       throw new NotFoundException('Job Not Found');
     }
     return job;
