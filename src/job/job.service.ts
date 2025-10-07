@@ -13,6 +13,7 @@ import { CreatePushJobDto } from './dto/create-push-job.dto';
 import { UpdateJobStatusDto } from './dto/update-status.dto';
 import { Enrichment, Job } from './types/job-interfaces';
 import { LoggerService } from '@tazama-lf/frms-coe-lib';
+import { DatabaseService } from '../database/database.service';
 
 @Injectable()
 export class JobService {
@@ -21,6 +22,7 @@ export class JobService {
     private readonly scheduleService: SchedulerService,
     private readonly executorService: ExecutorService,
     private readonly loggerService: LoggerService,
+    private readonly db: DatabaseService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -30,8 +32,7 @@ export class JobService {
 
   async validateExisting(table_name: string): Promise<void> {
     validateTableName(table_name);
-    const exists =
-      (await this.executorService.tableExist(table_name)) || (await this.knex('job').where({ table_name: table_name }).first());
+    const exists = (await this.db.tableExist(table_name)) && !!(await this.knex('job').where({ table_name: table_name }).first());
     if (exists) {
       this.loggerService.error('Table Already Exists');
       throw new BadRequestException('Table Already Exists');
@@ -53,6 +54,7 @@ export class JobService {
       const [newJob] = await this.knex('endpoints')
         .insert({ ...job, id: v4() })
         .returning('*');
+      await this.db.ensureTable(newJob.table_name);
       return newJob;
     } catch (err) {
       this.loggerService.error(err.message);
@@ -76,7 +78,7 @@ export class JobService {
       throw new BadRequestException('Endpoint Not Approved');
     }
 
-    await this.executorService.ensureTable(existing.table_name);
+    await this.db.ensureTable(existing.table_name);
 
     const correlation_id = v4();
     const tenant_id = Math.round(Math.random() * 9999).toString();
@@ -88,7 +90,7 @@ export class JobService {
       checksum: createHash('sha256').update(JSON.stringify(item)).digest('hex'),
     }));
 
-    await this.executorService.updateTable(existing.table_name, existing.mode, payload);
+    await this.db.updateTableWithMetaData(existing.table_name, existing.mode, payload);
 
     return {
       message: 'Data Enriched Successfully',

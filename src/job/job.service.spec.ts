@@ -6,6 +6,7 @@ import { SchedulerService } from '../scheduler/scheduler.service';
 import * as cryptoUtils from '../utils/helpers';
 import { JobService } from './job.service';
 import { LoggerService } from '@tazama-lf/frms-coe-lib';
+import { DatabaseService } from '../database/database.service';
 
 jest.mock('uuid', () => ({
   v4: jest.fn(() => 'asd13as-asd13sfgwg-123jbuqr4'),
@@ -16,6 +17,7 @@ describe('JobService', () => {
   let fakeKnex: any;
   let jobQueryBuilder: any;
   let scheduleQueryBuilder: any;
+  let db: DatabaseService;
   let fakeExecutorService: ExecutorService;
 
   beforeEach(async () => {
@@ -33,7 +35,7 @@ describe('JobService', () => {
       first: jest.fn().mockResolvedValue({ id: 'schedule-123', cron: '* * * * *' }), // schedule exists
     };
 
-    fakeExecutorService = {
+    db = {
       tableExist: jest.fn().mockResolvedValue(false),
       ensureTable: jest.fn().mockResolvedValue(true),
     } as any;
@@ -48,6 +50,7 @@ describe('JobService', () => {
       providers: [
         JobService,
         { provide: 'KNEX_CONNECTION', useValue: fakeKnex },
+        { provide: DatabaseService, useValue: db },
         { provide: ExecutorService, useValue: fakeExecutorService },
         { provide: SchedulerService, useValue: {} },
         { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('10') } },
@@ -78,8 +81,7 @@ describe('JobService', () => {
     jobQueryBuilder.returning.mockResolvedValueOnce([{ id: 'asd13as-asd13sfgwg-123jbuqr4', name: 'Test Job' }]);
 
     const job = await service.createPull(httpPayload as any);
-    expect(fakeExecutorService.tableExist).toHaveBeenCalledWith('dummy_http_job_table');
-    expect(jobQueryBuilder.where).toHaveBeenCalledWith({ table_name: 'dummy_http_job_table' });
+    expect(db.tableExist).toHaveBeenCalledWith('dummy_http_job_table');
     expect(jobQueryBuilder.insert).toHaveBeenCalledWith({
       ...httpPayload,
       id: 'asd13as-asd13sfgwg-123jbuqr4',
@@ -103,8 +105,7 @@ describe('JobService', () => {
 
     const result = await service.createPull(sftpPayload as any);
 
-    expect(fakeExecutorService.tableExist).toHaveBeenCalledWith('dummy_sftp_job_table');
-    expect(jobQueryBuilder.where).toHaveBeenCalledWith({ table_name: 'dummy_sftp_job_table' });
+    expect(db.tableExist).toHaveBeenCalledWith('dummy_sftp_job_table');
     expect(jobQueryBuilder.insert).toHaveBeenCalled();
 
     const insertedPayload = (jobQueryBuilder.insert as jest.Mock).mock.calls[0][0];

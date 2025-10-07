@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsObject, IsString, ValidateIf, ValidateNested } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsNumber, IsObject, IsString, ValidateIf, ValidateNested } from 'class-validator';
 import { AuthType, EncodingType, FileType, IngestMode, SourceType } from '../../utils/interfaces';
 
 class HTTPConnectionDto {
@@ -46,9 +46,6 @@ class FileSettingDto {
 
   @IsString()
   delimiter: string;
-
-  @IsBoolean()
-  header: boolean;
 
   @IsEnum(EncodingType)
   encoding: EncodingType;

@@ -4,10 +4,11 @@ import { JobController } from './job.controller';
 import { JobService } from './job.service';
 import { SchedulerModule } from '../scheduler/scheduler.module';
 import { LoggerModule } from '../logger-service/logger-service.module';
+import { DatabaseModule } from '../database/database.module';
 
 @Module({
   providers: [JobService],
-  imports: [ExecutorModule, SchedulerModule, LoggerModule],
+  imports: [ExecutorModule, SchedulerModule, LoggerModule, DatabaseModule],
   controllers: [JobController],
 })
 export class JobModule {}
