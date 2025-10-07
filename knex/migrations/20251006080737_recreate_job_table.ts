@@ -1,6 +1,8 @@
 import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
+  await knex.schema.dropTableIfExists('job');
+
   await knex.schema.createTable('job', (table) => {
     table.string('id').notNullable().primary();
     table.string('endpoint_name').notNullable();
