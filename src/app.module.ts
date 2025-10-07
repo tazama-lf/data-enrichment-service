@@ -8,6 +8,7 @@ import { JobModule } from './job/job.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { KnexModule } from '../knex/knex.module';
 import { LoggerModule } from './logger-service/logger-service.module';
+import { DatabaseModule } from './database/database.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { LoggerModule } from './logger-service/logger-service.module';
     KnexModule,
     SchedulerModule,
     LoggerModule,
+    DatabaseModule,
   ],
   controllers: [AppController],
   providers: [AppService],

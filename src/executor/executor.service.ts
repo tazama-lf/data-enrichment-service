@@ -4,89 +4,21 @@ import { LoggerService } from '@tazama-lf/frms-coe-lib';
 import axios from 'axios';
 import { CronJob } from 'cron';
 import { parse } from 'csv-parse/sync';
-import knex, { Knex } from 'knex';
 import SFTPClient from 'ssh2-sftp-client';
+import { DatabaseService } from '../database/database.service';
 import { FileSettings, HTTPConnection, Job, SFTPConnection } from '../job/types/job-interfaces';
 import { decrypt } from '../utils/helpers';
-import { AuthType, EncodingType, FileType, IngestMode, SourceType } from '../utils/interfaces';
-import { v4 } from 'uuid';
+import { AuthType, EncodingType, FileType, SourceType } from '../utils/interfaces';
 
 @Injectable()
 export class ExecutorService {
-  private knex: Knex;
   private readonly failureCounters = new Map<string, number>();
 
   constructor(
     private readonly schedulerRegistry: SchedulerRegistry,
     private readonly loggerService: LoggerService,
-  ) {
-    this.knex = knex({
-      client: 'pg',
-      connection: process.env.DATABASE_URL,
-    });
-  }
-
-  async ensureTable(tableName: string): Promise<void> {
-    try {
-      const exists = await this.tableExist(tableName);
-      if (!exists) {
-        await this.knex.schema.createTable(tableName, (table) => {
-          table.string('id').notNullable();
-          table.json('data').notNullable();
-          table.timestamp('created_at').defaultTo(this.knex.fn.now());
-        });
-      }
-    } catch (err: any) {
-      if (err.message.includes('already exists')) {
-        this.loggerService.log(`Table ${tableName} already created, ignoring...`);
-      } else {
-        this.loggerService.error(err.message);
-      }
-    }
-    return;
-  }
-
-  async tableExist(tableName: string): Promise<boolean> {
-    return this.knex.schema.hasTable(tableName.trim().toLowerCase());
-  }
-
-  async updateTable(table_name: string, mode: IngestMode, data: any): Promise<void> {
-    await this.ensureTable(table_name);
-
-    let rows: { id: string; data: string }[] = [];
-
-    if (Array.isArray(data)) {
-      rows = data?.map((item) => ({
-        id: v4(),
-        data: JSON.stringify(item),
-      }));
-    } else if (typeof data === 'object' && data !== null) {
-      for (const val of Object.values(data)) {
-        if (Array.isArray(val)) {
-          rows.push(
-            ...val.map((item) => ({
-              id: v4(),
-              data: JSON.stringify(item),
-            })),
-          );
-        } else {
-          rows.push({
-            id: v4(),
-            data: JSON.stringify(val),
-          });
-        }
-      }
-    }
-
-    if (mode === IngestMode.APPEND) {
-      await this.knex(table_name).insert(rows);
-    } else if (mode === IngestMode.REPLACE) {
-      await this.knex.transaction(async (trx) => {
-        await trx(table_name).del();
-        await trx(table_name).insert(rows);
-      });
-    }
-  }
+    private readonly db: DatabaseService,
+  ) {}
 
   private async handleFailure(job: Job, jobKey: string): Promise<void> {
     const currentFailures = this.failureCounters.get(jobKey) ?? 0;
@@ -118,7 +50,7 @@ export class ExecutorService {
     const { data, status } = await axios.get(httpCon.url, { headers: httpCon.headers });
 
     if (status === 200 && typeof data === 'object') {
-      await this.updateTable(job.table_name, job.mode, data);
+      await this.db.updateTable(job.table_name, job.mode, data);
       this.failureCounters.set(jobKey, 0);
     } else {
       await this.handleFailure(job, jobKey);
@@ -153,7 +85,7 @@ export class ExecutorService {
 
       const rawContent = await this.readSftpFile(sftp, file);
       const records = this.parseFile(rawContent, file);
-      await this.updateTable(job.table_name, job.mode, records);
+      await this.db.updateTable(job.table_name, job.mode, records);
 
       this.failureCounters.set(jobKey, 0);
     } catch (error: any) {
