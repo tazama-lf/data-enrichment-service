@@ -56,3 +56,18 @@ export function validateTableName(tableName: string): void {
     throw new BadRequestException(`Invalid table name "${tableName}". It is a reserved SQL keyword.`);
   }
 }
+
+export function validateFileType(filePath: string): 'CSV' | 'TSV' | 'JSON' {
+  const ext = filePath.split('.').pop()?.toLowerCase();
+
+  switch (ext) {
+    case 'csv':
+      return 'CSV';
+    case 'tsv':
+      return 'TSV';
+    case 'json':
+      return 'JSON';
+    default:
+      throw new Error(`Invalid file type: ${ext}. Only CSV, TSV, or JSON are allowed.`);
+  }
+}
