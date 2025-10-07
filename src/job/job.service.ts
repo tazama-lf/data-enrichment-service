@@ -53,8 +53,6 @@ export class JobService {
       const [newJob] = await this.knex('endpoints')
         .insert({ ...job, id: v4() })
         .returning('*');
-
-      await this.executorService.ensureTable(newJob.table_name);
       return newJob;
     } catch (err) {
       this.loggerService.error(err.message);
@@ -73,6 +71,12 @@ export class JobService {
     if (!existing) {
       throw new NotFoundException('Invalid Path');
     }
+
+    if (existing.job_status === JobStatus.PENDING) {
+      throw new BadRequestException('Endpoint Not Approved');
+    }
+
+    await this.executorService.ensureTable(existing.table_name);
 
     const correlation_id = v4();
     const tenant_id = Math.round(Math.random() * 9999).toString();
