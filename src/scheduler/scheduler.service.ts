@@ -1,5 +1,6 @@
 import { Inject, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { Knex } from 'knex';
+import { validateCronExpression } from '../utils/helpers';
 import { CreateScheduleJobDto } from './dto/create-schedule.dto';
 import { ScheduleDto } from './dto/schedule.dto';
 import { Schedule } from './types/scheduler-interfaces';
@@ -9,8 +10,8 @@ export class SchedulerService {
   constructor(@Inject('KNEX_CONNECTION') private readonly knex: Knex) {}
 
   async create(schedule: CreateScheduleJobDto): Promise<Schedule> {
+    validateCronExpression(schedule.cron);
     const [result] = await this.knex('schedule').insert(schedule).returning('*');
-
     return result;
   }
 

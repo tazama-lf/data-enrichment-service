@@ -13,7 +13,7 @@ export class SchedulerController {
   }
 
   @Get('/all')
-  async getAll(@Query('page') page: string, @Query('limit') limit: string) {
+  async getAll(@Query('page') page = '1', @Query('limit') limit = '10') {
     return await this.schedulerService.findAll(parseInt(page), parseInt(limit));
   }
 
