@@ -5,7 +5,7 @@ import { Knex } from 'knex';
 import { v4 } from 'uuid';
 import { ExecutorService } from '../executor/executor.service';
 import { SchedulerService } from '../scheduler/scheduler.service';
-import { encrypt, validateTableName } from '../utils/helpers';
+import { encrypt, validateFileType, validateTableName } from '../utils/helpers';
 import { AuthType, JobStatus, SourceType } from '../utils/interfaces';
 import { CreateEnrichDataDto } from './dto/create-enrich-data.dto';
 import { CreatePullJobDto, SFTPConnectionDto } from './dto/create-pull-job.dto';
@@ -107,8 +107,11 @@ export class JobService {
         throw new BadRequestException(`Schedule Id of ${job.schedule_id} not found`);
       }
 
+      await this.executorService.dryRun(job);
+
       let connection = job.connection;
       if (job.source_type === SourceType.SFTP) {
+        validateFileType(job.file.path);
         const sftpConn = connection as SFTPConnectionDto;
         if (sftpConn.auth_type === AuthType.USERNAME_PASSWORD && sftpConn.password) {
           connection = {

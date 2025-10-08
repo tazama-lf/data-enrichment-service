@@ -9,6 +9,7 @@ import { DatabaseService } from '../database/database.service';
 import { FileSettings, HTTPConnection, Job, SFTPConnection } from '../job/types/job-interfaces';
 import { decrypt } from '../utils/helpers';
 import { AuthType, EncodingType, FileType, SourceType } from '../utils/interfaces';
+import { CreatePullJobDto } from '../job/dto/create-pull-job.dto';
 
 @Injectable()
 export class ExecutorService {
@@ -50,7 +51,7 @@ export class ExecutorService {
     const { data, status } = await axios.get(httpCon.url, { headers: httpCon.headers });
 
     if (status === 200 && typeof data === 'object') {
-      await this.db.updateTable(job.table_name, job.mode, data);
+      await this.db.updateTable(job.table_name, job.mode, data, httpCon.url);
       this.failureCounters.set(jobKey, 0);
     } else {
       await this.handleFailure(job, jobKey);
@@ -85,7 +86,8 @@ export class ExecutorService {
 
       const rawContent = await this.readSftpFile(sftp, file);
       const records = this.parseFile(rawContent, file);
-      await this.db.updateTable(job.table_name, job.mode, records);
+
+      await this.db.updateTable(job.table_name, job.mode, records, file.path);
 
       this.failureCounters.set(jobKey, 0);
     } catch (error: any) {
@@ -105,13 +107,13 @@ export class ExecutorService {
     return buffer.toString(encoding);
   }
 
-  private parseFile(content: string, file: FileSettings): string[][] | Record<string, unknown>[] {
+  private parseFile(content: string, file: FileSettings): (string[] | Record<string, unknown>)[] {
     switch (file.file_type) {
       case FileType.CSV:
       case FileType.TSV:
         return parse(content, {
           delimiter: file.file_type === FileType.CSV ? (file.delimiter ?? ',') : '\t',
-          columns: file.header,
+          columns: true,
           skip_empty_lines: true,
           trim: true,
         });
@@ -125,6 +127,80 @@ export class ExecutorService {
         }
       default:
         throw new Error('Unsupported file type');
+    }
+  }
+
+  private async dryRunHttpJob(job: CreatePullJobDto): Promise<any> {
+    const httpCon = job.connection as HTTPConnection;
+    const { data, status } = await axios.get(httpCon.url, { headers: httpCon.headers });
+
+    if (status !== 200) {
+      throw new Error(`HTTP source returned status ${status}`);
+    }
+
+    if (data === undefined || data === null) {
+      throw new Error(`No data received from HTTP source ${httpCon.url}`);
+    }
+
+    const isValidType = typeof data === 'object' && !Array.isArray(data) ? true : Array.isArray(data);
+
+    if (!isValidType) {
+      throw new Error(`Invalid data type received from HTTP source: expected object or array, got ${typeof data}`);
+    }
+  }
+
+  private async dryRunSftpJob(job: CreatePullJobDto): Promise<any> {
+    const sftpCon = job.connection as SFTPConnection;
+    const file = job.file;
+    const sftp = new SFTPClient();
+
+    try {
+      try {
+        if (sftpCon.auth_type === AuthType.USERNAME_PASSWORD) {
+          await sftp.connect({
+            host: sftpCon.host,
+            port: sftpCon.port,
+            username: sftpCon.user_name,
+            password: sftpCon.password,
+          });
+        } else {
+          await sftp.connect({
+            host: sftpCon.host,
+            port: sftpCon.port,
+            username: sftpCon.user_name,
+            privateKey: sftpCon.private_key,
+          });
+        }
+      } catch (connErr: any) {
+        throw new Error(`Failed to connect to SFTP server ${sftpCon.host}:${sftpCon.port} — ${connErr.message}`);
+      }
+
+      if (!file?.path) throw new Error('File path not provided in job config');
+      const fileExists = await sftp.exists(file.path);
+      if (!fileExists) throw new Error(`File ${file.path} not found on SFTP server`);
+
+      const rawContent = await this.readSftpFile(sftp, file);
+      const records = this.parseFile(rawContent, file);
+
+      if (!records) {
+        this.loggerService.warn(`No data found in provided file with path :${file.path} `);
+        throw new Error(`No data found in provided file with path :${file.path} `);
+      }
+    } finally {
+      sftp.end();
+    }
+  }
+
+  async dryRun(job: CreatePullJobDto): Promise<any> {
+    try {
+      if (job.source_type === SourceType.HTTP) {
+        return await this.dryRunHttpJob(job);
+      } else if (job.source_type === SourceType.SFTP) {
+        return await this.dryRunSftpJob(job);
+      }
+    } catch (error: any) {
+      this.loggerService.error(`Dry run failed: ${error.message}`);
+      throw new Error(`Dry run failed: ${error.message}`);
     }
   }
 

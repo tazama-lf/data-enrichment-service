@@ -60,11 +60,14 @@ export class DatabaseService {
     return this.knex.schema.hasTable(tableName.trim().toLowerCase());
   }
 
-  async updateTable(table_name: string, mode: IngestMode, data: any): Promise<void> {
+  async updateTable(table_name: string, mode: IngestMode, data: any, path: string): Promise<void> {
     await this.ensureTable(table_name);
     const arr = Array.isArray(data) ? data : Object.values(data).flat();
 
-    if (!arr.length) return;
+    if (!arr.length) {
+      this.loggerService.warn(`Not enough data in ${path}`);
+      throw new Error(`Not enough data received from path : ${path}`);
+    }
 
     if (mode === IngestMode.APPEND) {
       const rows = arr.map((item) => ({
