@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { CreateScheduleJobDto } from './dto/create-schedule.dto';
 import { SchedulerService } from './scheduler.service';
 import { UpdateScheduleJobDto } from './dto/update-schedule.dto';
@@ -13,8 +13,8 @@ export class SchedulerController {
   }
 
   @Get('/all')
-  async getAll() {
-    return await this.schedulerService.findAll();
+  async getAll(@Query('page') page = '1', @Query('limit') limit = '10') {
+    return await this.schedulerService.findAll(parseInt(page), parseInt(limit));
   }
 
   @Delete('/:id')
