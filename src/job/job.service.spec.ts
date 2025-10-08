@@ -18,7 +18,6 @@ describe('JobService', () => {
   let jobQueryBuilder: any;
   let scheduleQueryBuilder: any;
   let db: DatabaseService;
-  let fakeExecutorService: ExecutorService;
 
   beforeEach(async () => {
     jobQueryBuilder = {
@@ -32,7 +31,7 @@ describe('JobService', () => {
 
     scheduleQueryBuilder = {
       where: jest.fn().mockReturnThis(),
-      first: jest.fn().mockResolvedValue({ id: 'schedule-123', cron: '* * * * *' }), // schedule exists
+      first: jest.fn().mockResolvedValue({ id: 'schedule-123', cron: '* * * * *' }),
     };
 
     db = {
@@ -51,7 +50,7 @@ describe('JobService', () => {
         JobService,
         { provide: 'KNEX_CONNECTION', useValue: fakeKnex },
         { provide: DatabaseService, useValue: db },
-        { provide: ExecutorService, useValue: fakeExecutorService },
+        { provide: ExecutorService, useValue: { dryRun: jest.fn() } },
         { provide: SchedulerService, useValue: {} },
         { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('10') } },
         { provide: LoggerService, useValue: { log: jest.fn(), error: jest.fn() } },
@@ -98,6 +97,12 @@ describe('JobService', () => {
         host: 'sftp.example.com',
         username: 'user1',
         password: 'hashed_pass',
+      },
+      file: {
+        path: 'test.json',
+        file_type: 'JSON',
+        delimiter: ',',
+        encoding: 'utf8',
       },
       table_name: 'dummy_sftp_job_table',
       schedule_id: 'schedule-123',

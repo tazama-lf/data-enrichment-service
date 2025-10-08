@@ -32,7 +32,7 @@ export class JobService {
 
   async validateExisting(table_name: string): Promise<void> {
     validateTableName(table_name);
-    const exists = (await this.db.tableExist(table_name)) && !!(await this.knex('job').where({ table_name: table_name }).first());
+    const exists = (await this.db.tableExist(table_name)) || (await this.knex('job').where({ table_name: table_name }).first());
     if (exists) {
       this.loggerService.error('Table Already Exists');
       throw new BadRequestException('Table Already Exists');
