@@ -71,3 +71,12 @@ export function validateFileType(filePath: string): 'CSV' | 'TSV' | 'JSON' {
       throw new Error(`Invalid file type: ${ext}. Only CSV, TSV, or JSON are allowed.`);
   }
 }
+
+export function validateCronExpression(expression: string): boolean {
+  try {
+    new CronTime(expression);
+    return true;
+  } catch (error) {
+    throw new BadRequestException(`Invalid Cron Expression : ${error.message}`);
+  }
+}
