@@ -1,4 +1,4 @@
-import { Inject, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { Knex } from 'knex';
 import { validateCronExpression } from '../utils/helpers';
 import { CreateScheduleJobDto } from './dto/create-schedule.dto';
@@ -16,6 +16,10 @@ export class SchedulerService {
   }
 
   async findAll(page = 1, limit = 10): Promise<Schedule[]> {
+    if (page < 1 || limit < 1) {
+      throw new BadRequestException('Invalid Params provided');
+    }
+
     const offset = (page - 1) * limit;
     const [data] = await Promise.all([
       this.knex('schedule').select('*').limit(limit).offset(offset),
