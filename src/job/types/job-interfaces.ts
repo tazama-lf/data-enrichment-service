@@ -16,9 +16,9 @@ interface SFTPConnection {
 }
 
 type FileSettings =
-  | { file_type: FileType.CSV; delimiter?: string; header?: boolean | string[]; path: string; encoding?: string }
-  | { file_type: FileType.TSV; header?: boolean | string[]; path: string; encoding?: string }
-  | { file_type: FileType.JSON; path: string; encoding?: string };
+  | { file_type: FileType.CSV; delimiter?: string; header?: boolean | string[]; path: string }
+  | { file_type: FileType.TSV; header?: boolean | string[]; path: string }
+  | { file_type: FileType.JSON; path: string };
 
 interface Job {
   id: string;

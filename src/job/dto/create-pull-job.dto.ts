@@ -1,6 +1,6 @@
 import { Type } from 'class-transformer';
 import { IsEnum, IsNotEmpty, IsNumber, IsObject, IsString, ValidateIf, ValidateNested } from 'class-validator';
-import { AuthType, EncodingType, FileType, IngestMode, SourceType } from '../../utils/interfaces';
+import { AuthType, FileType, IngestMode, SourceType } from '../../utils/interfaces';
 
 class HTTPConnectionDto {
   @IsString()
@@ -46,9 +46,6 @@ class FileSettingDto {
 
   @IsString()
   delimiter: string;
-
-  @IsEnum(EncodingType)
-  encoding: EncodingType;
 }
 
 export class CreatePullJobDto {
