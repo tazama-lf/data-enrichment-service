@@ -182,8 +182,10 @@ export class ExecutorService {
           skip_empty_lines: true,
           trim: true,
           relax_quotes: true,
-          quote: false,
+          quote: '"',
           relax_column_count: true,
+          escape: '"',
+          record_delimiter: ['\r\n', '\n', '\r'],
         });
         return records;
       }
