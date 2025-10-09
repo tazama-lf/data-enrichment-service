@@ -107,8 +107,6 @@ export class JobService {
         throw new BadRequestException(`Schedule Id of ${job.schedule_id} not found`);
       }
 
-      await this.executorService.dryRun(job);
-
       let connection = job.connection;
       if (job.source_type === SourceType.SFTP) {
         validateFileType(job.file.path);
@@ -125,6 +123,8 @@ export class JobService {
           };
         }
       }
+
+      await this.executorService.dryRun(job);
 
       const [newJob] = await this.knex('job')
         .insert({ ...job, id: v4(), connection })
