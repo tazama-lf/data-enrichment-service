@@ -80,3 +80,7 @@ export function validateCronExpression(expression: string): boolean {
     throw new BadRequestException(`Invalid Cron Expression : ${error.message}`);
   }
 }
+
+export function isValidText(text: string): boolean {
+  return !/�{3,}/.test(text);
+}

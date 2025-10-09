@@ -4,13 +4,13 @@ import { LoggerService } from '@tazama-lf/frms-coe-lib';
 import axios from 'axios';
 import { CronJob } from 'cron';
 import { parse } from 'csv-parse/sync';
+import * as iconv from 'iconv-lite';
 import SFTPClient from 'ssh2-sftp-client';
 import { DatabaseService } from '../database/database.service';
-import { FileSettings, HTTPConnection, Job, SFTPConnection } from '../job/types/job-interfaces';
-import { decrypt } from '../utils/helpers';
-import { AuthType, EncodingType, FileType, SourceType } from '../utils/interfaces';
 import { CreatePullJobDto } from '../job/dto/create-pull-job.dto';
-
+import { FileSettings, HTTPConnection, Job, SFTPConnection } from '../job/types/job-interfaces';
+import { decrypt, isValidText } from '../utils/helpers';
+import { AuthType, FileType, SourceType } from '../utils/interfaces';
 @Injectable()
 export class ExecutorService {
   private readonly failureCounters = new Map<string, number>();
@@ -84,9 +84,7 @@ export class ExecutorService {
       const fileExists = await sftp.exists(file.path);
       if (!fileExists) throw new Error(`File ${file.path} not found on SFTP server`);
 
-      const rawContent = await this.readSftpFile(sftp, file);
-      const records = this.parseFile(rawContent, file);
-
+      const records = await this.transformFileToJSON(sftp, file);
       await this.db.updateTable(job.table_name, job.mode, records, file.path);
 
       this.failureCounters.set(jobKey, 0);
@@ -95,38 +93,6 @@ export class ExecutorService {
       await this.handleFailure(job, jobKey);
     } finally {
       sftp.end();
-    }
-  }
-
-  private async readSftpFile(sftp: SFTPClient, file: FileSettings): Promise<string> {
-    const fileContent = await sftp.get(file.path);
-    const buffer = Buffer.isBuffer(fileContent) ? fileContent : Buffer.from(fileContent.toString());
-
-    const encoding: BufferEncoding = (file.encoding?.toLowerCase() as BufferEncoding) || EncodingType.UTF8;
-
-    return buffer.toString(encoding);
-  }
-
-  private parseFile(content: string, file: FileSettings): (string[] | Record<string, unknown>)[] {
-    switch (file.file_type) {
-      case FileType.CSV:
-      case FileType.TSV:
-        return parse(content, {
-          delimiter: file.file_type === FileType.CSV ? (file.delimiter ?? ',') : '\t',
-          columns: true,
-          skip_empty_lines: true,
-          trim: true,
-        });
-      case FileType.JSON:
-        try {
-          const parsed = JSON.parse(content);
-          return Array.isArray(parsed) ? parsed : [parsed];
-        } catch (error: any) {
-          this.loggerService.error(`Unable to parse JSON: ${error.message}`);
-          return [];
-        }
-      default:
-        throw new Error('Unsupported file type');
     }
   }
 
@@ -179,8 +145,7 @@ export class ExecutorService {
       const fileExists = await sftp.exists(file.path);
       if (!fileExists) throw new Error(`File ${file.path} not found on SFTP server`);
 
-      const rawContent = await this.readSftpFile(sftp, file);
-      const records = this.parseFile(rawContent, file);
+      const records = await this.transformFileToJSON(sftp, file);
 
       if (!records) {
         this.loggerService.warn(`No data found in provided file with path :${file.path} `);
@@ -188,6 +153,44 @@ export class ExecutorService {
       }
     } finally {
       sftp.end();
+    }
+  }
+
+  async transformFileToJSON(sftp: SFTPClient, file: FileSettings): Promise<any> {
+    try {
+      const buffer = await sftp.get(file.path);
+
+      let decoded: string;
+      try {
+        decoded = iconv.decode(buffer, 'utf8');
+        if (!isValidText(decoded)) {
+          throw new Error('Invalid text after decoding');
+        }
+      } catch (decodeError) {
+        this.loggerService.warn(`Decoding failed : ${decodeError}`);
+      }
+
+      if (file.file_type === FileType.JSON) {
+        const parsed = JSON.parse(decoded);
+        return Array.isArray(parsed) ? parsed : [parsed];
+      }
+
+      if (file.file_type === FileType.CSV || file.file_type === FileType.TSV) {
+        const records = parse(decoded, {
+          delimiter: file.file_type === FileType.CSV ? (file.delimiter ?? ',') : '\t',
+          columns: true,
+          skip_empty_lines: true,
+          trim: true,
+          relax_quotes: true,
+          quote: false,
+        });
+        return records;
+      }
+
+      throw new Error('Unsupported file type');
+    } catch (error) {
+      this.loggerService.error('Error transforming file:', error);
+      throw error;
     }
   }
 
