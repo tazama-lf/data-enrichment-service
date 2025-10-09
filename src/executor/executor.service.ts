@@ -212,6 +212,13 @@ export class ExecutorService {
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const jobKey = `job-${job.id}-schedule-${job.schedule.id}`;
 
+    const existingJob = this.schedulerRegistry.getCronJobs().get(jobKey);
+    if (existingJob) {
+      this.loggerService.warn(`Cron job ${jobKey} already exists. Stopping and restarting.`);
+      existingJob.stop();
+      this.schedulerRegistry.deleteCronJob(jobKey);
+    }
+
     this.failureCounters.set(jobKey, 0);
 
     const cronJob = new CronJob(
