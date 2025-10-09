@@ -54,7 +54,6 @@ export class JobService {
       const [newJob] = await this.knex('endpoints')
         .insert({ ...job, id: v4() })
         .returning('*');
-      await this.db.ensureTable(newJob.table_name);
       return newJob;
     } catch (err) {
       this.loggerService.error(err.message);
@@ -78,7 +77,7 @@ export class JobService {
       throw new BadRequestException('Endpoint Not Approved');
     }
 
-    await this.db.ensureTable(existing.table_name);
+    await this.db.ensureTableWithMetaData(existing.table_name);
 
     const correlation_id = v4();
     const tenant_id = Math.round(Math.random() * 9999).toString();
@@ -168,5 +167,16 @@ export class JobService {
     if (job.job_status === JobStatus.INPROGRESS) {
       await this.execute(id);
     }
+  }
+
+  async updatePushStatus(id: string, endpoint: UpdateJobStatusDto): Promise<void> {
+    const job = await this.knex('endpoints').where({ id }).first();
+
+    if (!job) {
+      this.loggerService.error(`Endpoint with ${id} not Found`);
+      throw new NotFoundException('Endpoint Not Found');
+    }
+
+    await this.knex('endpoints').where({ id }).update({ job_status: endpoint.job_status });
   }
 }

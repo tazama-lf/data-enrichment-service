@@ -32,4 +32,9 @@ export class JobController {
   async getEnrich(@Req() req: Request, @Body() body: CreateEnrichDataDto) {
     return await this.jobService.createEnrich(req, body);
   }
+
+  @Patch('/push/:id')
+  async updatePushstatus(@Param('id') id: string, @Body() body: UpdateJobStatusDto) {
+    return await this.jobService.updatePushStatus(id, body);
+  }
 }

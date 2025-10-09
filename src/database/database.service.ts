@@ -96,7 +96,7 @@ export class DatabaseService {
         id: v4(),
         tenant_id: item?.tenant_id,
         correlation_id: item?.correlation_id,
-        data: JSON.stringify(item),
+        data: JSON.stringify(item.data),
         endpoint_id: item?.endpoint_id,
         checksum: item?.checksum,
       }));
@@ -109,7 +109,7 @@ export class DatabaseService {
           id: v4(),
           tenant_id: item?.tenant_id,
           correlation_id: item?.correlation_id,
-          data: JSON.stringify(item),
+          data: JSON.stringify(item.data),
           endpoint_id: item?.endpoint_id,
           checksum: item?.checksum,
         }));
