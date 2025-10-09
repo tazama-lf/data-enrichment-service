@@ -183,6 +183,7 @@ export class ExecutorService {
           trim: true,
           relax_quotes: true,
           quote: false,
+          relax_column_count: true,
         });
         return records;
       }
