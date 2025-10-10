@@ -178,7 +178,14 @@ export class ExecutorService {
       if (file.file_type === FileType.CSV || file.file_type === FileType.TSV) {
         const records = parse(decoded, {
           delimiter: file.file_type === FileType.CSV ? (file.delimiter ?? ',') : '\t',
-          columns: true,
+          columns: (headers: string[]) =>
+            headers.map((h) =>
+              h
+                .trim()
+                .toLowerCase()
+                .replace(/\s+/g, '_')
+                .replace(/[^\w_]/g, ''),
+            ),
           skip_empty_lines: true,
           trim: true,
           relax_quotes: true,
