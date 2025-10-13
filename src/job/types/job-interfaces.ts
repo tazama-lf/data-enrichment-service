@@ -43,4 +43,16 @@ interface Enrichment {
   data: Record<string, any>;
 }
 
-export { Enrichment, FileSettings, HTTPConnection, Job, SFTPConnection };
+interface Endpoint {
+  id: string;
+  endpoint_name: string;
+  path: string;
+  description: string;
+  mode: IngestMode;
+  table_name: string;
+  job_status: JobStatus;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export { Enrichment, FileSettings, HTTPConnection, Job, SFTPConnection, Endpoint };

@@ -5,10 +5,11 @@ import { JobService } from './job.service';
 import { SchedulerModule } from '../scheduler/scheduler.module';
 import { LoggerModule } from '../logger-service/logger-service.module';
 import { DatabaseModule } from '../database/database.module';
+import { RedisModule } from '../redis/redis.module';
 
 @Module({
   providers: [JobService],
-  imports: [ExecutorModule, SchedulerModule, LoggerModule, DatabaseModule],
+  imports: [ExecutorModule, SchedulerModule, LoggerModule, DatabaseModule, RedisModule],
   controllers: [JobController],
 })
 export class JobModule {}

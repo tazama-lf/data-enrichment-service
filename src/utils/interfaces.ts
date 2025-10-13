@@ -27,6 +27,7 @@ enum EncodingType {
 
 enum JobStatus {
   PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
   INPROGRESS = 'IN-PROGRESS',
   SUSPENDED = 'SUSPENDED',
   CLONED = 'CLONED',

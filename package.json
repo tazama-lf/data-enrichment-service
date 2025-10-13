@@ -30,6 +30,7 @@
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/schedule": "^6.0.0",
     "@tazama-lf/frms-coe-lib": "^6.0.0-rc.6",
+    "@tazama-lf/frms-coe-startup-lib": "^3.0.0-rc.1",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "axios": "^1.12.2",

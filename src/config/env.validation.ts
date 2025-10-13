@@ -1,5 +1,5 @@
 import { plainToClass } from 'class-transformer';
-import { IsEnum, IsString, IsNumberString, validateSync, IsNumber } from 'class-validator';
+import { IsEnum, IsNumber, IsNumberString, IsString, validateSync } from 'class-validator';
 
 enum NodeEnv {
   DEVELOPMENT = 'dev',
@@ -32,14 +32,54 @@ class EnvironmentVariables {
   @IsString()
   CONFIGURATION_DATABASE_HOST: string;
 
+  @IsString()
+  ENCRYPTION_KEY: string;
+
   @IsNumber()
   SALT_ROUNDS: number;
+
+  @IsString()
+  REDIS_HOST: string;
+
+  @IsNumber()
+  REDIS_PORT: number;
+
+  @IsString()
+  REDIS_PASSWORD: string;
+
+  @IsString()
+  SFTP_HOST_DEV: string;
+
+  @IsNumber()
+  SFTP_PORT_DEV: number;
+
+  @IsString()
+  SFTP_USERNAME_DEV: string;
+
+  @IsString()
+  SFTP_PASSWORD_DEV: string;
+
+  @IsString()
+  SERVER_URL: string;
+
+  @IsString()
+  STARTUP_TYPE: string;
+
+  @IsString()
+  PRODUCER_STREAM: string;
+
+  @IsString()
+  CONSUMER_STREAM: string;
+
+  @IsString()
+  STREAM_SUBJECT: string;
 }
 
 export const validate = (config: Record<string, unknown>) => {
   const validatedConfig = plainToClass(EnvironmentVariables, config, {
     enableImplicitConversion: true,
   });
+
   const errors = validateSync(validatedConfig, {
     skipMissingProperties: false,
   });

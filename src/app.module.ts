@@ -9,6 +9,8 @@ import { SchedulerModule } from './scheduler/scheduler.module';
 import { KnexModule } from '../knex/knex.module';
 import { LoggerModule } from './logger-service/logger-service.module';
 import { DatabaseModule } from './database/database.module';
+import { RedisModule } from './redis/redis.module';
+import { NotifyModule } from './notify/notify.module';
 
 @Module({
   imports: [
@@ -23,6 +25,8 @@ import { DatabaseModule } from './database/database.module';
     SchedulerModule,
     LoggerModule,
     DatabaseModule,
+    RedisModule,
+    NotifyModule,
   ],
   controllers: [AppController],
   providers: [AppService],
