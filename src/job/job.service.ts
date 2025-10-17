@@ -1,8 +1,10 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { LoggerService } from '@tazama-lf/frms-coe-lib';
 import { createHash } from 'crypto';
 import { Request } from 'express';
 import { Knex } from 'knex';
 import { v4 } from 'uuid';
+import { DatabaseService } from '../database/database.service';
 import { ExecutorService } from '../executor/executor.service';
 import { SchedulerService } from '../scheduler/scheduler.service';
 import { encrypt, validateFileType, validateTableName } from '../utils/helpers';
@@ -12,8 +14,6 @@ import { CreatePullJobDto, SFTPConnectionDto } from './dto/create-pull-job.dto';
 import { CreatePushJobDto } from './dto/create-push-job.dto';
 import { UpdateJobStatusDto } from './dto/update-status.dto';
 import { Enrichment, Job } from './types/job-interfaces';
-import { LoggerService } from '@tazama-lf/frms-coe-lib';
-import { DatabaseService } from '../database/database.service';
 
 @Injectable()
 export class JobService {

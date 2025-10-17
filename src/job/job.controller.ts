@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Req } from '@nestjs/common';
+import { Body, Controller, Param, Patch, Post, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { Serialize } from '../interceptors/serialize.interceptor';
 import { CreateEnrichDataDto } from './dto/create-enrich-data.dto';
@@ -36,10 +36,5 @@ export class JobController {
   @Patch('/push/:id')
   async updatePushstatus(@Param('id') id: string, @Body() body: UpdateJobStatusDto) {
     return await this.jobService.updatePushStatus(id, body);
-  }
-
-  @Get('/redis')
-  async getCache() {
-    return await this.jobService.testRedis();
   }
 }

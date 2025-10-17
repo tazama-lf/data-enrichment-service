@@ -11,5 +11,6 @@ import { RedisModule } from '../redis/redis.module';
   providers: [JobService],
   imports: [ExecutorModule, SchedulerModule, LoggerModule, DatabaseModule, RedisModule],
   controllers: [JobController],
+  exports: [JobService],
 })
 export class JobModule {}
