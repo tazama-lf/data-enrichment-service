@@ -18,9 +18,6 @@ class EnvironmentVariables {
   FUNCTION_NAME: string;
 
   @IsString()
-  DATABASE_URL: string;
-
-  @IsString()
   CONFIGURATION_DATABASE: string;
 
   @IsString()

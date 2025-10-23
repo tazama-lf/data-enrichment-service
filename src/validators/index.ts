@@ -11,7 +11,7 @@ export function IsJsonOrArray(validationOptions?: ValidationOptions) {
         validate(value: any) {
           if (typeof value !== 'object' || value === null) return false;
           if (Array.isArray(value)) {
-            return value.every((item) => typeof item === 'object' && item !== null);
+            return value.every((item) => typeof item === 'object' && item !== null && !Array.isArray(item));
           }
           return true;
         },
