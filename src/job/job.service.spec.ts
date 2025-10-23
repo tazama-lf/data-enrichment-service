@@ -2,8 +2,6 @@ import { NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ExecutorService } from '../executor/executor.service';
-import { SchedulerService } from '../scheduler/scheduler.service';
-import * as cryptoUtils from '../utils/helpers';
 import { JobService } from './job.service';
 import { LoggerService } from '@tazama-lf/frms-coe-lib';
 import { DatabaseService } from '../database/database.service';
@@ -27,8 +25,6 @@ describe('JobService', () => {
       returning: jest.fn().mockResolvedValue([{ id: 'asd13as-asd13sfgwg-123jbuqr4', name: 'Test Job' }]),
     };
 
-    jest.spyOn(cryptoUtils, 'encrypt').mockImplementation(() => 'hashed_pass');
-
     scheduleQueryBuilder = {
       where: jest.fn().mockReturnThis(),
       first: jest.fn().mockResolvedValue({ id: 'schedule-123', cron: '* * * * *' }),
@@ -51,7 +47,6 @@ describe('JobService', () => {
         { provide: 'KNEX_CONNECTION', useValue: fakeKnex },
         { provide: DatabaseService, useValue: db },
         { provide: ExecutorService, useValue: { dryRun: jest.fn() } },
-        { provide: SchedulerService, useValue: {} },
         { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('10') } },
         { provide: LoggerService, useValue: { log: jest.fn(), error: jest.fn() } },
       ],
@@ -62,30 +57,6 @@ describe('JobService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
-  });
-
-  it('should create HTTP Job', async () => {
-    const httpPayload = {
-      endpoint_name: 'Dummy',
-      source_type: 'HTTP',
-      description: 'Dummy Pull',
-      connection: {
-        url: '/v1/enrich/ACM102/customerdata',
-        headers: { 'content-type': 'application/json' },
-      },
-      table_name: 'dummy_http_job_table',
-      schedule_id: 'schedule-123',
-    };
-
-    jobQueryBuilder.returning.mockResolvedValueOnce([{ id: 'asd13as-asd13sfgwg-123jbuqr4', name: 'Test Job' }]);
-
-    const job = await service.createPull(httpPayload as any);
-    expect(db.tableExist).toHaveBeenCalledWith('dummy_http_job_table');
-    expect(jobQueryBuilder.insert).toHaveBeenCalledWith({
-      ...httpPayload,
-      id: 'asd13as-asd13sfgwg-123jbuqr4',
-    });
-    expect(job).toEqual({ id: 'asd13as-asd13sfgwg-123jbuqr4', name: 'Test Job' });
   });
 
   it('should hash password for SFTP job payload', async () => {

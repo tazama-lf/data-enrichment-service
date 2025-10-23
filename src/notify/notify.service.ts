@@ -1,11 +1,10 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
 import { StartupFactory } from '@tazama-lf/frms-coe-startup-lib';
-import { Knex } from 'knex';
-import { Endpoint } from '../job/types/job-interfaces';
-import { IMessage } from './types/notify';
-import { ConfigType } from '../utils/interfaces';
 import { JobService } from '../job/job.service';
+import { Endpoint } from '../job/types/job-interfaces';
+import { ConfigType } from '../utils/interfaces';
+import { IMessage } from './types/notify';
 
 const CACHE_TTL = 86400;
 
@@ -17,7 +16,6 @@ export class NotifyService {
     private readonly logger: LoggerService,
     private readonly redis: RedisService,
     private readonly jobService: JobService,
-    @Inject('KNEX_CONNECTION') private readonly knex: Knex,
   ) {}
 
   async onModuleInit(): Promise<void> {

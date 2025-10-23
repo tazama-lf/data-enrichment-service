@@ -4,7 +4,6 @@ import { LoggerService } from '@tazama-lf/frms-coe-lib';
 
 describe('DatabaseService', () => {
   let service: DatabaseService;
-  let fakeKnex: any;
 
   const mockLoggerService = {
     log: jest.fn(),
@@ -15,14 +14,7 @@ describe('DatabaseService', () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        DatabaseService,
-        { provide: LoggerService, useValue: mockLoggerService },
-        {
-          provide: 'KNEX_CONNECTION',
-          useValue: fakeKnex,
-        },
-      ],
+      providers: [DatabaseService, { provide: LoggerService, useValue: mockLoggerService }],
     }).compile();
 
     service = module.get<DatabaseService>(DatabaseService);
