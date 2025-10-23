@@ -94,4 +94,8 @@ export class CreatePullJobDto {
 
   @IsEnum(IngestMode)
   mode: IngestMode = IngestMode.APPEND;
+
+  @IsString()
+  @IsNotEmpty()
+  version: string;
 }

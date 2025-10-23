@@ -4,5 +4,5 @@ import { IsJsonOrArray } from '../../validators';
 export class CreateEnrichDataDto {
   @IsNotEmpty()
   @IsJsonOrArray({ message: 'Data must be a JSON object or an array of JSON objects' })
-  data: Record<string, any> | Record<string, any>[];
+  data: Record<string, unknown> | Record<string, unknown>[];
 }

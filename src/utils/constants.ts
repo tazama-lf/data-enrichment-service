@@ -16,4 +16,6 @@ const RESERVED_KEYWORDS = new Set([
   'limit',
 ]);
 
-export { RESERVED_KEYWORDS };
+const CACHE_TTL = 86400;
+
+export { RESERVED_KEYWORDS, CACHE_TTL };

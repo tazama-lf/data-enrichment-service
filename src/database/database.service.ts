@@ -1,16 +1,38 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { LoggerService } from '@tazama-lf/frms-coe-lib';
-import { Knex } from 'knex';
-import { IngestMode } from '../utils/interfaces';
+import { Pool, QueryResult } from 'pg';
 import { v4 } from 'uuid';
 import { Enrichment } from '../job/types/job-interfaces';
+import { IngestMode } from '../utils/interfaces';
 
 @Injectable()
 export class DatabaseService {
-  constructor(
-    @Inject('KNEX_CONNECTION') private readonly knex: Knex,
-    private readonly loggerService: LoggerService,
-  ) {}
+  private pool: Pool;
+  constructor(private readonly loggerService: LoggerService) {
+    this.pool = new Pool({
+      connectionString: process.env.CONFIGURATION_DATABASE_URL,
+      max: 10,
+    });
+  }
+
+  async query<T = any>(sql: string, params?: any[]): Promise<QueryResult<T>> {
+    const result = await this.pool.query(sql, params);
+    return result;
+  }
+
+  async tableExist(tableName: string): Promise<boolean> {
+    const cleanName = tableName.trim().toLowerCase();
+    const query = `
+    SELECT EXISTS (
+      SELECT FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      AND table_name = $1
+    ) AS exists;
+  `;
+
+    const result = await this.pool.query(query, [cleanName]);
+    return result.rows[0]?.exists || false;
+  }
 
   async ensureTable(tableName: string): Promise<void> {
     try {
@@ -22,7 +44,7 @@ export class DatabaseService {
           table.timestamp('created_at').defaultTo(this.knex.fn.now());
         });
       }
-    } catch (err: any) {
+    } catch (err) {
       if (err.message.includes('already exists')) {
         this.loggerService.log(`Table ${tableName} already created, ignoring...`);
       } else {
@@ -46,7 +68,7 @@ export class DatabaseService {
           table.timestamp('created_at').defaultTo(this.knex.fn.now());
         });
       }
-    } catch (err: any) {
+    } catch (err) {
       if (err.message.includes('already exists')) {
         this.loggerService.log(`Table ${tableName} already created, ignoring...`);
       } else {
@@ -54,10 +76,6 @@ export class DatabaseService {
       }
     }
     return;
-  }
-
-  async tableExist(tableName: string): Promise<boolean> {
-    return this.knex.schema.hasTable(tableName.trim().toLowerCase());
   }
 
   async updateTable(table_name: string, mode: IngestMode, data: any, path: string): Promise<void> {
@@ -75,7 +93,7 @@ export class DatabaseService {
         data: JSON.stringify(item),
       }));
       await this.knex(table_name).insert(rows);
-    } else if (mode === IngestMode.REPLACE) {
+    } else {
       await this.knex.transaction(async (trx) => {
         await trx(table_name).del();
 
@@ -101,7 +119,7 @@ export class DatabaseService {
         checksum: item?.checksum,
       }));
       await this.knex(table_name).insert(rows);
-    } else if (mode === IngestMode.REPLACE) {
+    } else {
       await this.knex.transaction(async (trx) => {
         await trx(table_name).del();
 

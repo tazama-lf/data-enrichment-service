@@ -3,14 +3,12 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { validate } from './config/env.validation';
+import { DatabaseModule } from './database/database.module';
 import { ExecutorModule } from './executor/executor.module';
 import { JobModule } from './job/job.module';
-import { SchedulerModule } from './scheduler/scheduler.module';
-import { KnexModule } from '../knex/knex.module';
 import { LoggerModule } from './logger-service/logger-service.module';
-import { DatabaseModule } from './database/database.module';
-import { RedisModule } from './redis/redis.module';
 import { NotifyModule } from './notify/notify.module';
+import { RedisModule } from './redis/redis.module';
 
 @Module({
   imports: [
@@ -21,8 +19,6 @@ import { NotifyModule } from './notify/notify.module';
     }),
     JobModule,
     ExecutorModule,
-    KnexModule,
-    SchedulerModule,
     LoggerModule,
     DatabaseModule,
     RedisModule,

@@ -29,9 +29,17 @@ export class JobService {
     }
 
     const cleanedPath = req.path.replace(/^\/job/, '');
-    const existing = await this.knex('endpoints').where({ path: cleanedPath }).first();
+    const query = `
+       SELECT *
+        FROM endpoints
+         WHERE path = $1
+          LIMIT 1;
+        `;
+
+    const result = await this.db.query(query, [cleanedPath]);
+    const existing = result.rows[0];
     if (!existing) {
-      throw new NotFoundException('Invalid Path');
+      throw new NotFoundException(`Given endpoint ${cleanedPath} does not exist.`);
     }
 
     if (existing.job_status === JobStatus.PENDING) {
