@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
-import { NotifyService } from './notify.service';
-import { LoggerModule } from '../logger-service/logger-service.module';
 import { ConfigModule } from '@nestjs/config';
-import { RedisModule } from '../redis/redis.module';
 import { DatabaseModule } from '../database/database.module';
 import { JobModule } from '../job/job.module';
+import { LoggerModule } from '../logger-service/logger-service.module';
+import { RedisModule } from '../redis/redis.module';
+import { NotifyService } from './notify.service';
 
 @Module({
   imports: [LoggerModule, ConfigModule, RedisModule, DatabaseModule, JobModule],

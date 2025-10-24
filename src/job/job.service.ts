@@ -67,12 +67,27 @@ export class JobService {
   }
 
   async findAllPull(): Promise<Job[]> {
-    const data = await this.knex('job').select('*').orderBy('created_at', 'desc');
+    const query = `
+      SELECT *
+       FROM job
+       ORDER BY created_at DESC;
+      `;
+
+    const result = await this.db.query(query);
+    const data = result.rows;
     return data;
   }
 
   async findOnePull(id: string): Promise<Job> {
-    const job = await this.knex<Job>('job').where({ id }).first();
+    const query = `
+        SELECT *
+         FROM job
+           WHERE id = $1
+             LIMIT 1;
+              `;
+
+    const result = await this.db.query(query, [id]);
+    const job = result.rows[0];
 
     if (!job) {
       this.loggerService.error(`Job with ${id} not Found`);
@@ -83,7 +98,15 @@ export class JobService {
 
   async execute(id: string): Promise<void> {
     const res = await this.findOnePull(id);
-    const schedule = await this.scheduleService.findOne(res.schedule_id);
+    const query = `
+        SELECT *
+         FROM schedule
+          WHERE id = $1
+           LIMIT 1;
+          `;
+
+    const result = await this.db.query(query, [res.schedule_id]);
+    const schedule = result.rows[0];
     await this.executorService.addCronJob({ ...res, schedule });
   }
 }

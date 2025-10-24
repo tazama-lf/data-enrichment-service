@@ -5,6 +5,7 @@ import { JobService } from '../job/job.service';
 import { Endpoint } from '../job/types/job-interfaces';
 import { ConfigType } from '../utils/interfaces';
 import { IMessage } from './types/notify';
+import { DatabaseService } from '../database/database.service';
 
 const CACHE_TTL = 86400;
 
@@ -16,6 +17,7 @@ export class NotifyService {
     private readonly logger: LoggerService,
     private readonly redis: RedisService,
     private readonly jobService: JobService,
+    private readonly db: DatabaseService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -27,7 +29,14 @@ export class NotifyService {
     );
     this.logger.log('NATS consumer initialized for config.notification');
 
-    const configs = (await this.knex('endpoints').where({ job_status: 'APPROVED' })) as Endpoint[];
+    const query = `
+        SELECT *
+         FROM endpoints
+           WHERE job_status = 'APPROVED';
+          `;
+
+    const result = await this.db.query(query);
+    const configs = result.rows as Endpoint[];
 
     for (const config of configs) {
       await this.redis.setJson(config.path, JSON.stringify(config), CACHE_TTL);
@@ -39,7 +48,16 @@ export class NotifyService {
     const id = reqObj.TxTp;
     try {
       if (reqObj.type === ConfigType.PUSH) {
-        const config = (await this.knex('endpoints').where('id', id).first()) as Endpoint | undefined;
+        const query = `
+          SELECT *
+            FROM endpoints
+             WHERE id = $1
+              LIMIT 1;
+          `;
+
+        const result = await this.db.query(query, [id]);
+        const config = result.rows[0] as Endpoint | undefined;
+
         if (config) {
           const existingData = await this.redis.getJson('approved');
           let parsedArray: Endpoint[] = [];
