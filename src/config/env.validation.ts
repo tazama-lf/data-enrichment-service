@@ -18,16 +18,7 @@ class EnvironmentVariables {
   FUNCTION_NAME: string;
 
   @IsString()
-  CONFIGURATION_DATABASE: string;
-
-  @IsString()
-  CONFIGURATION_DATABASE_USER: string;
-
-  @IsString()
-  CONFIGURATION_DATABASE_PASSWORD: string;
-
-  @IsString()
-  CONFIGURATION_DATABASE_HOST: string;
+  CONFIGURATION_DATABASE_URL: string;
 
   @IsString()
   ENCRYPTION_KEY: string;
