@@ -1,5 +1,4 @@
-import { Schedule } from '../../scheduler/types/scheduler-interfaces';
-import { AuthType, FileType, IngestMode, JobStatus, SourceType } from '../../utils/interfaces';
+import { AuthType, FileType, IngestMode, JobStatus, Schedule, SourceType } from '../../utils/interfaces';
 
 interface HTTPConnection {
   url: string;
@@ -55,4 +54,4 @@ interface Endpoint {
   updated_at: Date;
 }
 
-export { Enrichment, FileSettings, HTTPConnection, Job, SFTPConnection, Endpoint };
+export { Endpoint, Enrichment, FileSettings, HTTPConnection, Job, SFTPConnection };

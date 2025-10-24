@@ -26,11 +26,10 @@ enum EncodingType {
 }
 
 enum JobStatus {
-  PENDING = 'PENDING',
-  APPROVED = 'APPROVED',
-  INPROGRESS = 'IN-PROGRESS',
-  SUSPENDED = 'SUSPENDED',
-  CLONED = 'CLONED',
+  PENDING = 'pending',
+  APPROVED = 'approved',
+  INPROGRESS = 'in-progress',
+  REJECTED = 'rejected',
 }
 
 enum ScheduleStatus {
@@ -43,4 +42,13 @@ enum IngestMode {
   REPLACE = 'replace',
 }
 
-export { SourceType, ScheduleStatus, FileType, AuthType, ConfigType, EncodingType, JobStatus, IngestMode };
+interface Schedule {
+  id: number;
+  name: string;
+  iterations: number;
+  schedule_status: ScheduleStatus;
+  next_time: string | null;
+  cron: string;
+}
+
+export { SourceType, ScheduleStatus, FileType, AuthType, ConfigType, EncodingType, JobStatus, IngestMode, type Schedule };
