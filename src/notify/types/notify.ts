@@ -1,4 +1,4 @@
-import { ConfigType } from '../../utils/interfaces';
+import { ConfigType } from '@tazama-lf/tcs-lib';
 
 interface IMessage {
   TxTp: string;

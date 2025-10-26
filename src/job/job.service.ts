@@ -5,9 +5,8 @@ import { Request } from 'express';
 import { v4 } from 'uuid';
 import { DatabaseService } from '../database/database.service';
 import { ExecutorService } from '../executor/executor.service';
-import { JobStatus } from '../utils/interfaces';
 import { CreateEnrichDataDto } from './dto/create-enrich-data.dto';
-import { Enrichment, Job } from './types/job-interfaces';
+import { Enrichment, Job, JobStatus } from '@tazama-lf/tcs-lib';
 
 @Injectable()
 export class JobService {

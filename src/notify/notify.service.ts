@@ -2,8 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
 import { StartupFactory } from '@tazama-lf/frms-coe-startup-lib';
 import { JobService } from '../job/job.service';
-import { Endpoint } from '../job/types/job-interfaces';
-import { ConfigType } from '../utils/interfaces';
+import { ConfigType, PushJob } from '@tazama-lf/tcs-lib';
 import { IMessage } from './types/notify';
 import { DatabaseService } from '../database/database.service';
 
@@ -36,7 +35,7 @@ export class NotifyService {
           `;
 
     const result = await this.db.query(query);
-    const configs = result.rows as Endpoint[];
+    const configs = result.rows as PushJob[];
 
     for (const config of configs) {
       await this.redis.setJson(config.path, JSON.stringify(config), CACHE_TTL);
@@ -56,11 +55,11 @@ export class NotifyService {
           `;
 
         const result = await this.db.query(query, [id]);
-        const config = result.rows[0] as Endpoint | undefined;
+        const config = result.rows[0] as PushJob | undefined;
 
         if (config) {
           const existingData = await this.redis.getJson('approved');
-          let parsedArray: Endpoint[] = [];
+          let parsedArray: PushJob[] = [];
 
           if (existingData) {
             parsedArray = JSON.parse(existingData);

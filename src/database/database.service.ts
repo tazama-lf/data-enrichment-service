@@ -2,8 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { LoggerService } from '@tazama-lf/frms-coe-lib';
 import { Pool, QueryResult } from 'pg';
 import { v4 } from 'uuid';
-import { Enrichment } from '../job/types/job-interfaces';
-import { IngestMode } from '../utils/interfaces';
+import { Enrichment } from '@tazama-lf/tcs-lib';
+import { IngestMode } from '@tazama-lf/tcs-lib';
 
 @Injectable()
 export class DatabaseService {
