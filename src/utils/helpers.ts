@@ -1,7 +1,5 @@
 import * as crypto from 'crypto';
 import { CronTime } from 'cron';
-import { BadRequestException } from '@nestjs/common';
-import { RESERVED_KEYWORDS } from './constants';
 
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
 const buffer = Buffer.from(`${ENCRYPTION_KEY}`, 'utf8');
@@ -21,46 +19,6 @@ export function getNextTime(cronExp: string) {
   const cronTime = new CronTime(cronExp);
   const nextDate = cronTime.sendAt();
   return nextDate.toISO();
-}
-
-export function validateTableName(tableName: string): void {
-  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(tableName)) {
-    throw new BadRequestException(
-      `Invalid table name "${tableName}". Only letters, numbers, and underscores are allowed, and it must start with a letter or underscore.`,
-    );
-  }
-
-  if (tableName.length > 63) {
-    throw new BadRequestException(`Invalid table name "${tableName}". Must not exceed 63 characters.`);
-  }
-
-  if (RESERVED_KEYWORDS.has(tableName.toLowerCase())) {
-    throw new BadRequestException(`Invalid table name "${tableName}". It is a reserved SQL keyword.`);
-  }
-}
-
-export function validateFileType(filePath: string): 'CSV' | 'TSV' | 'JSON' {
-  const ext = filePath.split('.').pop()?.toLowerCase();
-
-  switch (ext) {
-    case 'csv':
-      return 'CSV';
-    case 'tsv':
-      return 'TSV';
-    case 'json':
-      return 'JSON';
-    default:
-      throw new Error(`Invalid file type: ${ext}. Only CSV, TSV, or JSON are allowed.`);
-  }
-}
-
-export function validateCronExpression(expression: string): boolean {
-  try {
-    new CronTime(expression);
-    return true;
-  } catch (error) {
-    throw new BadRequestException(`Invalid Cron Expression : ${error.message}`);
-  }
 }
 
 export function isValidText(text: string): boolean {
