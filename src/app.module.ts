@@ -9,6 +9,7 @@ import { JobModule } from './job/job.module';
 import { LoggerModule } from './logger-service/logger-service.module';
 import { NotifyModule } from './notify/notify.module';
 import { RedisModule } from './redis/redis.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { RedisModule } from './redis/redis.module';
     DatabaseModule,
     RedisModule,
     NotifyModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
