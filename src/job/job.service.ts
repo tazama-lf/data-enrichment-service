@@ -1,111 +1,156 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { LoggerService } from '@tazama-lf/frms-coe-lib';
+import { BadRequestException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { SchedulerRegistry } from '@nestjs/schedule';
+import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
+import { Enrichment, ISuccess, Job, JobStatus } from '@tazama-lf/tcs-lib';
+import { CronJob } from 'cron';
 import { createHash } from 'crypto';
 import { Request } from 'express';
 import { v4 } from 'uuid';
 import { DatabaseService } from '../database/database.service';
 import { ExecutorService } from '../executor/executor.service';
+import { isSameDay } from '../utils/helpers';
 import { CreateEnrichDataDto } from './dto/create-enrich-data.dto';
-import { Enrichment, Job, JobStatus } from '@tazama-lf/tcs-lib';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
-export class JobService {
+export class JobService implements OnModuleInit {
+  private readonly cacheTtl: number;
+
   constructor(
+    private readonly schedulerRegistry: SchedulerRegistry,
     private readonly executorService: ExecutorService,
     private readonly loggerService: LoggerService,
     private readonly db: DatabaseService,
-  ) {}
-
-  async onModuleInit(): Promise<void> {
-    const jobs = await this.findAllPull();
-    jobs.filter((opt) => opt.job_status === JobStatus.INPROGRESS).forEach((job) => void this.execute(job.id));
+    private readonly configService: ConfigService,
+    private readonly redis: RedisService,
+  ) {
+    this.cacheTtl = this.configService.get<number>('CACHE_TTL', 86400);
   }
 
-  async createEnrich(req: Request, body: CreateEnrichDataDto): Promise<{ message: string; status: number }> {
+  onModuleInit() {
+    this.handleCron();
+  }
+
+  async handleCron(): Promise<void> {
+    try {
+      const cronJob = new CronJob(
+        this.configService.get<string>('DAILY_CRON', '0 0 * * *'),
+        async () => {
+          this.handleDailyJobCheck();
+        },
+        null,
+        true,
+      );
+
+      this.schedulerRegistry.addCronJob('daily-job', cronJob);
+      cronJob.start();
+    } catch (error) {
+      this.loggerService.error(`Error in cron job: ${error.message}`);
+    }
+  }
+
+  async handleDailyJobCheck(): Promise<void> {
+    this.loggerService.log('Running daily job activation check...');
+
+    try {
+      const today = new Date();
+
+      const jobs: Job[] = await this.getAllPullJobs();
+      this.loggerService.log(`Found ${jobs.length} job(s) to check.`);
+
+      for (const job of jobs) {
+        const startDate = new Date(job.start_date);
+        const endDate = job.end_date ? new Date(job.end_date) : null;
+        const jobKey = `job-${job.id}-schedule-${job.schedule_id}`;
+        const existingJob = this.schedulerRegistry.getCronJobs().get(jobKey);
+
+        if (isSameDay(today, startDate) && !existingJob) {
+          this.loggerService.log(`Activating job with id: ${job.id}`);
+          await this.executorService.addCronJob(job);
+        }
+
+        if (endDate && today > endDate && existingJob) {
+          this.loggerService.warn(`Stopping expired job with id: ${job.id}`);
+          this.schedulerRegistry.deleteCronJob(jobKey);
+        }
+      }
+    } catch (error: unknown) {
+      this.loggerService.error(
+        `Failed to run daily job activation check: ${error instanceof Error ? error.message : JSON.stringify(error)}`,
+      );
+    }
+  }
+
+  async createEnrich(req: Request, body: CreateEnrichDataDto, tenantId: string): Promise<ISuccess> {
     const contentType = req.headers['content-type'];
     if (!contentType?.includes('application/json')) {
       throw new BadRequestException('Content-Type must be application/json');
     }
 
-    const cleanedPath = req.path.replace(/^\/job/, '');
-    const query = `
-       SELECT *
-        FROM endpoints
-         WHERE path = $1
-          LIMIT 1;
-        `;
+    const path = req.path;
 
-    const result = await this.db.query(query, [cleanedPath]);
-    const existing = result.rows[0];
-    if (!existing) {
-      throw new NotFoundException(`Given endpoint ${cleanedPath} does not exist.`);
+    const cachedEndpoint = await this.redis.getJson(path);
+    let endpoint = JSON.parse(cachedEndpoint);
+
+    this.loggerService.log(`Getting endpoint from cache ${JSON.stringify(endpoint)}`);
+
+    if (!endpoint) {
+      const query = `
+      SELECT *
+      FROM endpoints
+      WHERE path = $1
+        AND tenant_id = $2
+      LIMIT 1;
+    `;
+      const { rows } = await this.db.query(query, [path, tenantId]);
+      endpoint = rows[0];
+
+      if (!endpoint) {
+        throw new NotFoundException(`Endpoint '${path}' does not exist.`);
+      }
+      if (endpoint.status !== JobStatus.DEPLOYED) {
+        throw new BadRequestException('Endpoint not deployed');
+      }
+
+      await this.redis.setJson(path, endpoint, this.cacheTtl);
     }
 
-    if (existing.job_status === JobStatus.PENDING) {
-      throw new BadRequestException('Endpoint Not Approved');
-    }
-
-    await this.db.ensureTableWithMetaData(existing.table_name);
+    await this.db.ensureTableWithMetaData(endpoint.table_name);
 
     const correlation_id = v4();
-    const tenant_id = Math.round(Math.random() * 9999).toString();
     const payload: Enrichment[] = (Array.isArray(body.data) ? body.data : [body.data]).map((item) => ({
-      tenant_id,
+      tenant_id: tenantId,
       correlation_id,
       data: item,
-      endpoint_id: existing.id,
+      endpoint_id: endpoint.id,
       checksum: createHash('sha256').update(JSON.stringify(item)).digest('hex'),
     }));
 
-    await this.db.updateTableWithMetaData(existing.table_name, existing.mode, payload);
+    await this.db.updateTableWithMetaData(endpoint.table_name, endpoint.mode, payload);
 
     return {
       message: 'Data Enriched Successfully',
-      status: 200,
+      success: true,
     };
   }
 
-  async findAllPull(): Promise<Job[]> {
+  async getAllPullJobs(): Promise<Job[]> {
     const query = `
-      SELECT *
-       FROM job
-       ORDER BY created_at DESC;
-      `;
+      SELECT 
+        j.*, 
+        s.cron,
+        s.start_date,
+        s.end_date
+      FROM job j
+      LEFT JOIN schedule s ON j.schedule_id = s.id
+      WHERE 
+        j.status = 'deployed'
+        AND (s.start_date::date = $1::date OR s.end_date::date = $1::date)
+      ORDER BY j.created_at DESC;
+    `;
 
-    const result = await this.db.query(query);
-    const data = result.rows;
-    return data;
-  }
-
-  async findOnePull(id: string): Promise<Job> {
-    const query = `
-        SELECT *
-         FROM job
-           WHERE id = $1
-             LIMIT 1;
-              `;
-
-    const result = await this.db.query(query, [id]);
-    const job = result.rows[0];
-
-    if (!job) {
-      this.loggerService.error(`Job with ${id} not Found`);
-      throw new NotFoundException('Job Not Found');
-    }
-    return job;
-  }
-
-  async execute(id: string): Promise<void> {
-    const res = await this.findOnePull(id);
-    const query = `
-        SELECT *
-         FROM schedule
-          WHERE id = $1
-           LIMIT 1;
-          `;
-
-    const result = await this.db.query(query, [res.schedule_id]);
-    const schedule = result.rows[0];
-    await this.executorService.addCronJob({ ...res, schedule });
+    const date = new Date().toISOString().split('T')[0];
+    const result = await this.db.query(query, [date]);
+    return result.rows;
   }
 }
