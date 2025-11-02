@@ -26,7 +26,7 @@ export class ExecutorService {
     const newFailures = currentFailures + 1;
     await this.redis.set(jobKey, newFailures, CACHE_TTL);
 
-    if (job.schedule.iterations && newFailures >= job.schedule.iterations) {
+    if (job.iterations && newFailures >= job.iterations) {
       const cronJob = this.schedulerRegistry.getCronJob(jobKey);
       await cronJob.stop();
       this.schedulerRegistry.deleteCronJob(jobKey);
@@ -156,7 +156,7 @@ export class ExecutorService {
 
   async addCronJob(job: Job): Promise<void> {
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const jobKey = `job-${job.id}-schedule-${job.schedule.id}`;
+    const jobKey = `job-${job.id}-schedule-${job.schedule_id}`;
 
     const existingJob = this.schedulerRegistry.getCronJobs().get(jobKey);
     if (existingJob) {
@@ -168,7 +168,7 @@ export class ExecutorService {
     await this.redis.set(jobKey, 0, CACHE_TTL);
 
     const cronJob = new CronJob(
-      job.schedule.cron,
+      job.cron,
       async () => {
         await this.run(job, jobKey);
       },
@@ -177,7 +177,8 @@ export class ExecutorService {
       timeZone,
     );
 
-    this.schedulerRegistry.addCronJob(jobKey, cronJob as any);
+    this.schedulerRegistry.addCronJob(jobKey, cronJob);
     cronJob.start();
+    this.loggerService.log(`Cron Job Scheduled with key ${jobKey}`);
   }
 }

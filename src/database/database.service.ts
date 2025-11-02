@@ -15,7 +15,7 @@ export class DatabaseService {
     });
   }
 
-  async query<T = any>(sql: string, params?: any[]): Promise<QueryResult<T>> {
+  async query<T = unknown>(sql: string, params?: unknown[]): Promise<QueryResult<T>> {
     const result = await this.pool.query(sql, params);
     return result;
   }
@@ -108,7 +108,7 @@ export class DatabaseService {
     }
   }
 
-  async updateTable(table_name: string, mode: IngestMode, data: any): Promise<void> {
+  async updateTable(table_name: string, mode: IngestMode, data: unknown): Promise<void> {
     await this.ensureTable(table_name);
     const arr = Array.isArray(data) ? data : Object.values(data).flat();
 
