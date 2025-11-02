@@ -1,182 +1,156 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { SchedulerRegistry } from '@nestjs/schedule';
+import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
+import { Enrichment, ISuccess, Job, JobStatus } from '@tazama-lf/tcs-lib';
+import { CronJob } from 'cron';
 import { createHash } from 'crypto';
 import { Request } from 'express';
-import { Knex } from 'knex';
 import { v4 } from 'uuid';
-import { ExecutorService } from '../executor/executor.service';
-import { SchedulerService } from '../scheduler/scheduler.service';
-import { encrypt, validateFileType, validateTableName } from '../utils/helpers';
-import { AuthType, JobStatus, SourceType } from '../utils/interfaces';
-import { CreateEnrichDataDto } from './dto/create-enrich-data.dto';
-import { CreatePullJobDto, SFTPConnectionDto } from './dto/create-pull-job.dto';
-import { CreatePushJobDto } from './dto/create-push-job.dto';
-import { UpdateJobStatusDto } from './dto/update-status.dto';
-import { Enrichment, Job } from './types/job-interfaces';
-import { LoggerService } from '@tazama-lf/frms-coe-lib';
 import { DatabaseService } from '../database/database.service';
+import { ExecutorService } from '../executor/executor.service';
+import { isSameDay } from '../utils/helpers';
+import { CreateEnrichDataDto } from './dto/create-enrich-data.dto';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
-export class JobService {
+export class JobService implements OnModuleInit {
+  private readonly cacheTtl: number;
+
   constructor(
-    @Inject('KNEX_CONNECTION') private readonly knex: Knex,
-    private readonly scheduleService: SchedulerService,
+    private readonly schedulerRegistry: SchedulerRegistry,
     private readonly executorService: ExecutorService,
     private readonly loggerService: LoggerService,
     private readonly db: DatabaseService,
-  ) {}
-
-  async onModuleInit(): Promise<void> {
-    const jobs = await this.findAllPull();
-    jobs.filter((opt) => opt.job_status === JobStatus.INPROGRESS).forEach((job) => void this.execute(job.id));
+    private readonly configService: ConfigService,
+    private readonly redis: RedisService,
+  ) {
+    this.cacheTtl = this.configService.get<number>('CACHE_TTL', 86400);
   }
 
-  async validateExisting(table_name: string): Promise<void> {
-    validateTableName(table_name);
-    const exists = (await this.db.tableExist(table_name)) || (await this.knex('job').where({ table_name: table_name }).first());
-    if (exists) {
-      this.loggerService.error('Table Already Exists');
-      throw new BadRequestException('Table Already Exists');
-    }
+  onModuleInit() {
+    this.handleCron();
   }
 
-  async createPush(job: CreatePushJobDto): Promise<Job> {
+  async handleCron(): Promise<void> {
     try {
-      await this.validateExisting(job.table_name);
-      if (!job.path.startsWith('/v1/enrich/')) {
-        throw new BadRequestException(`Invalid path format. Path must start with "/v1/enrich/". Received: "${job.path}"`);
-      }
-      const existing = await this.knex('endpoints').where({ path: job.path }).first();
+      const cronJob = new CronJob(
+        this.configService.get<string>('DAILY_CRON', '0 0 * * *'),
+        async () => {
+          this.handleDailyJobCheck();
+        },
+        null,
+        true,
+      );
 
-      if (existing) {
-        throw new BadRequestException(`Endpoint "${job.path}" already exists.`);
-      }
-
-      const [newJob] = await this.knex('endpoints')
-        .insert({ ...job, id: v4() })
-        .returning('*');
-      return newJob;
-    } catch (err) {
-      this.loggerService.error(err.message);
-      throw new BadRequestException(err.message);
+      this.schedulerRegistry.addCronJob('daily-job', cronJob);
+      cronJob.start();
+    } catch (error) {
+      this.loggerService.error(`Error in cron job: ${error.message}`);
     }
   }
 
-  async createEnrich(req: Request, body: CreateEnrichDataDto): Promise<{ message: string; status: number }> {
+  async handleDailyJobCheck(): Promise<void> {
+    this.loggerService.log('Running daily job activation check...');
+
+    try {
+      const today = new Date();
+
+      const jobs: Job[] = await this.getAllPullJobs();
+      this.loggerService.log(`Found ${jobs.length} job(s) to check.`);
+
+      for (const job of jobs) {
+        const startDate = new Date(job.start_date);
+        const endDate = job.end_date ? new Date(job.end_date) : null;
+        const jobKey = `job-${job.id}-schedule-${job.schedule_id}`;
+        const existingJob = this.schedulerRegistry.getCronJobs().get(jobKey);
+
+        if (isSameDay(today, startDate) && !existingJob) {
+          this.loggerService.log(`Activating job with id: ${job.id}`);
+          await this.executorService.addCronJob(job);
+        }
+
+        if (endDate && today > endDate && existingJob) {
+          this.loggerService.warn(`Stopping expired job with id: ${job.id}`);
+          this.schedulerRegistry.deleteCronJob(jobKey);
+        }
+      }
+    } catch (error: unknown) {
+      this.loggerService.error(
+        `Failed to run daily job activation check: ${error instanceof Error ? error.message : JSON.stringify(error)}`,
+      );
+    }
+  }
+
+  async createEnrich(req: Request, body: CreateEnrichDataDto, tenantId: string): Promise<ISuccess> {
     const contentType = req.headers['content-type'];
     if (!contentType?.includes('application/json')) {
       throw new BadRequestException('Content-Type must be application/json');
     }
 
-    const cleanedPath = req.path.replace(/^\/job/, '');
-    const existing = await this.knex('endpoints').where({ path: cleanedPath }).first();
-    if (!existing) {
-      throw new NotFoundException('Invalid Path');
+    const path = req.path;
+
+    const cachedEndpoint = await this.redis.getJson(path);
+    let endpoint = JSON.parse(cachedEndpoint);
+
+    this.loggerService.log(`Getting endpoint from cache ${JSON.stringify(endpoint)}`);
+
+    if (!endpoint) {
+      const query = `
+      SELECT *
+      FROM endpoints
+      WHERE path = $1
+        AND tenant_id = $2
+      LIMIT 1;
+    `;
+      const { rows } = await this.db.query(query, [path, tenantId]);
+      endpoint = rows[0];
+
+      if (!endpoint) {
+        throw new NotFoundException(`Endpoint '${path}' does not exist.`);
+      }
+      if (endpoint.status !== JobStatus.DEPLOYED) {
+        throw new BadRequestException('Endpoint not deployed');
+      }
+
+      await this.redis.setJson(path, endpoint, this.cacheTtl);
     }
 
-    if (existing.job_status === JobStatus.PENDING) {
-      throw new BadRequestException('Endpoint Not Approved');
-    }
-
-    await this.db.ensureTableWithMetaData(existing.table_name);
+    await this.db.ensureTableWithMetaData(endpoint.table_name);
 
     const correlation_id = v4();
-    const tenant_id = Math.round(Math.random() * 9999).toString();
     const payload: Enrichment[] = (Array.isArray(body.data) ? body.data : [body.data]).map((item) => ({
-      tenant_id,
+      tenant_id: tenantId,
       correlation_id,
       data: item,
-      endpoint_id: existing.id,
+      endpoint_id: endpoint.id,
       checksum: createHash('sha256').update(JSON.stringify(item)).digest('hex'),
     }));
 
-    await this.db.updateTableWithMetaData(existing.table_name, existing.mode, payload);
+    await this.db.updateTableWithMetaData(endpoint.table_name, endpoint.mode, payload);
 
     return {
       message: 'Data Enriched Successfully',
-      status: 200,
+      success: true,
     };
   }
 
-  async createPull(job: CreatePullJobDto): Promise<Job> {
-    try {
-      await this.validateExisting(job.table_name);
+  async getAllPullJobs(): Promise<Job[]> {
+    const query = `
+      SELECT 
+        j.*, 
+        s.cron,
+        s.start_date,
+        s.end_date
+      FROM job j
+      LEFT JOIN schedule s ON j.schedule_id = s.id
+      WHERE 
+        j.status = 'deployed'
+        AND (s.start_date::date = $1::date OR s.end_date::date = $1::date)
+      ORDER BY j.created_at DESC;
+    `;
 
-      const exist = await this.knex('schedule').where({ id: job.schedule_id }).first();
-      if (!exist) {
-        throw new BadRequestException(`Schedule Id of ${job.schedule_id} not found`);
-      }
-
-      let connection = job.connection;
-      if (job.source_type === SourceType.SFTP) {
-        validateFileType(job.file.path);
-        const sftpConn = connection as SFTPConnectionDto;
-        if (sftpConn.auth_type === AuthType.USERNAME_PASSWORD && sftpConn.password) {
-          connection = {
-            ...sftpConn,
-            password: encrypt(sftpConn.password),
-          };
-        } else if (sftpConn.private_key) {
-          connection = {
-            ...sftpConn,
-            private_key: encrypt(sftpConn.private_key),
-          };
-        }
-      }
-
-      await this.executorService.dryRun(job);
-
-      const [newJob] = await this.knex('job')
-        .insert({ ...job, id: v4(), connection })
-        .returning('*');
-
-      return newJob;
-    } catch (err) {
-      if (Array.isArray(err)) {
-        const messages = err.flatMap((e) => Object.values(e.constraints ?? {}));
-        throw new BadRequestException(messages);
-      }
-      throw new BadRequestException(err.message || 'Invalid request payload');
-    }
-  }
-
-  async findAllPull(): Promise<Job[]> {
-    const data = await this.knex('job').select('*').orderBy('created_at', 'desc');
-    return data;
-  }
-
-  async findOnePull(id: string): Promise<Job> {
-    const job = await this.knex<Job>('job').where({ id }).first();
-
-    if (!job) {
-      this.loggerService.error(`Job with ${id} not Found`);
-      throw new NotFoundException('Job Not Found');
-    }
-    return job;
-  }
-
-  async execute(id: string): Promise<void> {
-    const res = await this.findOnePull(id);
-    const schedule = await this.scheduleService.findOne(res.schedule_id);
-    this.executorService.addCronJob({ ...res, schedule });
-  }
-
-  async updateStatus(id: string, job: UpdateJobStatusDto): Promise<void> {
-    await this.findOnePull(id);
-    await this.knex<Job>('job').where({ id }).update({ job_status: job.job_status });
-
-    if (job.job_status === JobStatus.INPROGRESS) {
-      await this.execute(id);
-    }
-  }
-
-  async updatePushStatus(id: string, endpoint: UpdateJobStatusDto): Promise<void> {
-    const job = await this.knex('endpoints').where({ id }).first();
-
-    if (!job) {
-      this.loggerService.error(`Endpoint with ${id} not Found`);
-      throw new NotFoundException('Endpoint Not Found');
-    }
-
-    await this.knex('endpoints').where({ id }).update({ job_status: endpoint.job_status });
+    const date = new Date().toISOString().split('T')[0];
+    const result = await this.db.query(query, [date]);
+    return result.rows;
   }
 }
