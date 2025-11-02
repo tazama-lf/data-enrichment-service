@@ -1,14 +1,20 @@
-import { Body, Controller, Post, Req } from '@nestjs/common';
+import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
+import { RequireEditorRole } from '../auth/auth.decorator';
+import { type AuthenticatedUser } from '../auth/auth.types';
+import { TazamaAuthGuard } from '../auth/tazam-auth.guard';
+import { User } from '../auth/user.decorator';
 import { CreateEnrichDataDto } from './dto/create-enrich-data.dto';
 import { JobService } from './job.service';
 
-@Controller('job')
+@Controller('')
+@UseGuards(TazamaAuthGuard)
 export class JobController {
   constructor(private jobService: JobService) {}
 
-  @Post('/v1/enrich/*')
-  async getEnrich(@Req() req: Request, @Body() body: CreateEnrichDataDto) {
-    return await this.jobService.createEnrich(req, body);
+  @Post('/tcs/*')
+  @RequireEditorRole()
+  async getEnrich(@Req() req: Request, @Body() body: CreateEnrichDataDto, @User() user: AuthenticatedUser) {
+    return await this.jobService.createEnrich(req, body, user.token.tenantId);
   }
 }

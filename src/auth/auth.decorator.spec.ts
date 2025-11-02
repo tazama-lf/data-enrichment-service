@@ -1,5 +1,13 @@
 import { SetMetadata } from '@nestjs/common';
-import { RequireClaims, CLAIMS_KEY, EventMonitoringClaims, RequireDemsWriteRole } from './auth.decorator';
+import {
+  RequireClaims,
+  CLAIMS_KEY,
+  RequireAnyClaims,
+  ANY_CLAIMS_KEY,
+  RequireClaim,
+  RequireEditorRole,
+  TazamaClaims,
+} from './auth.decorator';
 
 jest.mock('@nestjs/common', () => ({
   SetMetadata: jest.fn(),
@@ -74,30 +82,68 @@ describe('Auth Decorators', () => {
     });
   });
 
-  describe('EventMonitoringClaims', () => {
-    it('should have DEMS_WRITE claim', () => {
-      expect(EventMonitoringClaims.DEMS_WRITE).toBe('dems:write');
-    });
-
-    it('should be readonly object', () => {
-      expect(() => {
-        (EventMonitoringClaims as any).DEMS_WRITE = 'modified';
-      }).toThrow();
-    });
-
-    it('should have correct structure', () => {
-      expect(Object.keys(EventMonitoringClaims)).toEqual(['DEMS_WRITE']);
-    });
-  });
-
-  describe('RequireDemsWriteRole', () => {
-    it('should call RequireClaims with DEMS_WRITE claim', () => {
+  describe('RequireAnyClaims', () => {
+    it('should call SetMetadata with correct parameters for single claim', () => {
       const mockDecorator = { KEY: 'test' } as any;
       mockSetMetadata.mockReturnValue(mockDecorator);
 
-      const result = RequireDemsWriteRole();
+      const result = RequireAnyClaims('test:claim');
 
-      expect(mockSetMetadata).toHaveBeenCalledWith(CLAIMS_KEY, [EventMonitoringClaims.DEMS_WRITE]);
+      expect(mockSetMetadata).toHaveBeenCalledWith(ANY_CLAIMS_KEY, ['test:claim']);
+      expect(result).toBe(mockDecorator);
+    });
+
+    it('should call SetMetadata with correct parameters for multiple claims', () => {
+      const mockDecorator = { KEY: 'test' } as any;
+      mockSetMetadata.mockReturnValue(mockDecorator);
+
+      const result = RequireAnyClaims('claim1', 'claim2', 'claim3');
+
+      expect(mockSetMetadata).toHaveBeenCalledWith(ANY_CLAIMS_KEY, ['claim1', 'claim2', 'claim3']);
+      expect(result).toBe(mockDecorator);
+    });
+
+    it('should handle empty claims array', () => {
+      const mockDecorator = { KEY: 'test' } as any;
+      mockSetMetadata.mockReturnValue(mockDecorator);
+
+      const result = RequireAnyClaims();
+
+      expect(mockSetMetadata).toHaveBeenCalledWith(ANY_CLAIMS_KEY, []);
+      expect(result).toBe(mockDecorator);
+    });
+  });
+
+  describe('RequireClaim', () => {
+    it('should call SetMetadata with single claim wrapped in array', () => {
+      const mockDecorator = { KEY: 'test' } as any;
+      mockSetMetadata.mockReturnValue(mockDecorator);
+
+      const result = RequireClaim('single:claim');
+
+      expect(mockSetMetadata).toHaveBeenCalledWith(CLAIMS_KEY, ['single:claim']);
+      expect(result).toBe(mockDecorator);
+    });
+
+    it('should handle claim with special characters', () => {
+      const mockDecorator = { KEY: 'test' } as any;
+      mockSetMetadata.mockReturnValue(mockDecorator);
+
+      const result = RequireClaim('app/resource:action');
+
+      expect(mockSetMetadata).toHaveBeenCalledWith(CLAIMS_KEY, ['app/resource:action']);
+      expect(result).toBe(mockDecorator);
+    });
+  });
+
+  describe('RequireEditorRole', () => {
+    it('should call SetMetadata with EDITOR claim', () => {
+      const mockDecorator = { KEY: 'test' } as any;
+      mockSetMetadata.mockReturnValue(mockDecorator);
+
+      const result = RequireEditorRole();
+
+      expect(mockSetMetadata).toHaveBeenCalledWith(CLAIMS_KEY, [TazamaClaims.EDITOR]);
       expect(result).toBe(mockDecorator);
     });
 
@@ -105,35 +151,8 @@ describe('Auth Decorators', () => {
       const mockDecorator = { KEY: 'test' } as any;
       mockSetMetadata.mockReturnValue(mockDecorator);
 
-      const result = RequireDemsWriteRole();
+      const result = RequireEditorRole();
 
-      expect(result).toBe(mockDecorator);
-    });
-  });
-
-  describe('Integration Tests', () => {
-    it('should work with multiple decorators', () => {
-      const mockDecorator1 = { KEY: 'test1' } as any;
-      const mockDecorator2 = { KEY: 'test2' } as any;
-      mockSetMetadata.mockReturnValueOnce(mockDecorator1).mockReturnValueOnce(mockDecorator2);
-
-      const decorator1 = RequireClaims('claim1');
-      const decorator2 = RequireDemsWriteRole();
-
-      expect(decorator1).toBe(mockDecorator1);
-      expect(decorator2).toBe(mockDecorator2);
-      expect(mockSetMetadata).toHaveBeenCalledTimes(2);
-    });
-
-    it('should handle complex claim combinations', () => {
-      const mockDecorator = { KEY: 'test' } as any;
-      mockSetMetadata.mockReturnValue(mockDecorator);
-
-      const complexClaims = ['admin:full-access', 'user:read', 'user:write', 'service:execute', EventMonitoringClaims.DEMS_WRITE];
-
-      const result = RequireClaims(...complexClaims);
-
-      expect(mockSetMetadata).toHaveBeenCalledWith(CLAIMS_KEY, complexClaims);
       expect(result).toBe(mockDecorator);
     });
   });
