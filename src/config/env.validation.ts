@@ -1,5 +1,5 @@
 import { plainToClass } from 'class-transformer';
-import { IsEnum, IsNumber, IsNumberString, IsString, validateSync } from 'class-validator';
+import { IsBoolean, IsEnum, IsNumber, IsNumberString, IsOptional, IsString, validateSync } from 'class-validator';
 
 enum NodeEnv {
   DEVELOPMENT = 'dev',
@@ -26,6 +26,12 @@ class EnvironmentVariables {
   @IsNumber()
   SALT_ROUNDS: number;
 
+  @IsNumber()
+  CACHE_TTL: number;
+
+  @IsString()
+  DAILY_CRON: string;
+
   @IsString()
   REDIS_HOST: string;
 
@@ -34,18 +40,6 @@ class EnvironmentVariables {
 
   @IsString()
   REDIS_PASSWORD: string;
-
-  @IsString()
-  SFTP_HOST_DEV: string;
-
-  @IsNumber()
-  SFTP_PORT_DEV: number;
-
-  @IsString()
-  SFTP_USERNAME_DEV: string;
-
-  @IsString()
-  SFTP_PASSWORD_DEV: string;
 
   @IsString()
   SERVER_URL: string;
@@ -61,6 +55,36 @@ class EnvironmentVariables {
 
   @IsString()
   STREAM_SUBJECT: string;
+
+  @IsBoolean()
+  APM_ACTIVE: boolean;
+
+  @IsString()
+  APM_URL: string;
+
+  @IsOptional()
+  @IsString()
+  APM_SECRET_TOKEN?: string;
+
+  @IsString()
+  APM_SERVICE_NAME: string;
+
+  @IsString()
+  TAZAMA_AUTH_URL: string;
+
+  @IsString()
+  AUTH_PUBLIC_KEY_PATH: string;
+
+  @IsString()
+  CERT_PATH_PUBLIC: string;
+
+  @IsOptional()
+  @IsString()
+  SIDECAR_HOST: string;
+
+  @IsOptional()
+  @IsString()
+  LOGSTASH_LEVEL: string;
 }
 
 export const validate = (config: Record<string, unknown>) => {
