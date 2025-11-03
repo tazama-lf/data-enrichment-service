@@ -37,7 +37,7 @@
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/schedule": "^6.0.1",
-    "@tazama-lf/auth-lib": "^2.2.0-rc.1",
+    "@tazama-lf/auth-lib": "^2.1.0",
     "@tazama-lf/frms-coe-lib": "^6.0.0-rc.6",
     "@tazama-lf/frms-coe-startup-lib": "^3.0.0-rc.1",
     "@tazama-lf/tcs-lib": "^1.0.3",
