@@ -1,7 +1,6 @@
 import { Injectable, CanActivate, ExecutionContext, UnauthorizedException, Logger } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ClaimValidationResult, TazamaToken, validateTokenAndClaims } from '@tazama-lf/auth-lib';
-import { decode } from 'jsonwebtoken';
 import { CLAIMS_KEY } from './auth.decorator';
 import { AuthenticatedUser } from './auth.types';
 
@@ -102,27 +101,22 @@ export class TazamaAuthGuard implements CanActivate {
 
   private extractTokenPayload(token: string): TazamaToken {
     try {
-      const decoded = decode(token);
-
-      if (!decoded || typeof decoded !== 'object') {
+      const jwt = require('jsonwebtoken');
+      const decoded = jwt.decode(token) as TazamaToken;
+      if (!decoded) {
         throw new Error('Failed to decode token');
       }
-
-      const tokenPayload = decoded as Partial<TazamaToken>;
-
-      if (!tokenPayload.clientId) {
+      // Validate required TazamaToken fields
+      if (!decoded.clientId) {
         throw new Error('Token missing clientId');
       }
-
-      if (!tokenPayload.tenantId) {
+      if (!decoded.tenantId) {
         throw new Error('Token missing tenantId');
       }
-
-      if (!tokenPayload.claims || !Array.isArray(tokenPayload.claims)) {
+      if (!decoded.claims || !Array.isArray(decoded.claims)) {
         throw new Error('Token missing or invalid claims array');
       }
-
-      return tokenPayload as TazamaToken;
+      return decoded;
     } catch (error) {
       const err = error as Error;
       this.logger.error(`Failed to extract token payload: ${err.message}`);
