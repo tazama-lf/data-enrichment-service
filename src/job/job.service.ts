@@ -136,21 +136,23 @@ export class JobService implements OnModuleInit {
 
   async getAllPullJobs(): Promise<Job[]> {
     const query = `
-      SELECT 
-        j.*, 
-        s.cron,
-        s.start_date,
-        s.end_date
-      FROM job j
-      LEFT JOIN schedule s ON j.schedule_id = s.id
-      WHERE 
-        j.status = 'deployed'
-        AND (s.start_date::date = $1::date OR s.end_date::date = $1::date)
-      ORDER BY j.created_at DESC;
-    `;
+    SELECT 
+      j.*, 
+      s.cron,
+      s.start_date,
+      s.end_date
+    FROM job j
+    LEFT JOIN schedule s ON j.schedule_id = s.id
+    WHERE 
+      j.status = 'deployed'
+      AND (
+        s.start_date::date = CURRENT_DATE
+        OR s.end_date::date = CURRENT_DATE
+      )
+    ORDER BY j.created_at DESC;
+  `;
 
-    const date = new Date().toISOString().split('T')[0];
-    const result = await this.db.query(query, [date]);
+    const result = await this.db.query(query);
     return result.rows;
   }
 }
