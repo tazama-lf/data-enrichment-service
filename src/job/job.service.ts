@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
 import { Enrichment, ISuccess, Job, JobStatus } from '@tazama-lf/tcs-lib';
@@ -10,7 +11,6 @@ import { DatabaseService } from '../database/database.service';
 import { ExecutorService } from '../executor/executor.service';
 import { isSameDay } from '../utils/helpers';
 import { CreateEnrichDataDto } from './dto/create-enrich-data.dto';
-import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class JobService implements OnModuleInit {
@@ -82,56 +82,65 @@ export class JobService implements OnModuleInit {
   }
 
   async createEnrich(req: Request, body: CreateEnrichDataDto, tenantId: string): Promise<ISuccess> {
-    const contentType = req.headers['content-type'];
-    if (!contentType?.includes('application/json')) {
-      throw new BadRequestException('Content-Type must be application/json');
-    }
+    try {
+      const contentType = req.headers['content-type'];
+      if (!contentType?.includes('application/json')) {
+        throw new BadRequestException('Content-Type must be application/json');
+      }
 
-    const path = req.path;
+      const path = req.path;
 
-    const cachedEndpoint = await this.redis.getJson(path);
-    let endpoint = JSON.parse(cachedEndpoint);
+      const cachedEndpoint = await this.redis.getJson(path);
+      let endpoint;
 
-    this.loggerService.log(`Getting endpoint from cache ${JSON.stringify(endpoint)}`);
-
-    if (!endpoint) {
-      const query = `
+      if (cachedEndpoint) {
+        endpoint = JSON.parse(cachedEndpoint);
+        this.loggerService.log(`Using endpoint from cache: ${path}`);
+      } else {
+        const query = `
       SELECT *
       FROM endpoints
-      WHERE path = $1
-        AND tenant_id = $2
+      WHERE path = $1 AND tenant_id = $2
       LIMIT 1;
     `;
-      const { rows } = await this.db.query(query, [path, tenantId]);
-      endpoint = rows[0];
+        const { rows } = await this.db.query(query, [path, tenantId]);
+        endpoint = rows[0];
 
-      if (!endpoint) {
-        throw new NotFoundException(`Endpoint '${path}' does not exist.`);
-      }
-      if (endpoint.status !== JobStatus.DEPLOYED) {
-        throw new BadRequestException('Endpoint not deployed');
+        if (!endpoint) {
+          throw new NotFoundException(`Endpoint '${path}' does not exist.`);
+        }
+        if (endpoint.status !== JobStatus.DEPLOYED) {
+          throw new BadRequestException('Endpoint not deployed');
+        }
+
+        await this.redis.setJson(path, JSON.stringify(endpoint), this.cacheTtl);
+        this.loggerService.log(`Cached endpoint for path: ${path}`);
       }
 
-      await this.redis.setJson(path, endpoint, this.cacheTtl);
+      await this.db.ensureTableWithMetaData(endpoint.table_name);
+
+      const correlation_id = v4();
+      const payload: Enrichment[] = (Array.isArray(body.data) ? body.data : [body.data]).map((item) => ({
+        tenant_id: tenantId,
+        correlation_id,
+        data: item,
+        endpoint_id: endpoint.id,
+        checksum: createHash('sha256').update(JSON.stringify(item)).digest('hex'),
+      }));
+
+      await this.db.updateTableWithMetaData(endpoint.table_name, endpoint.mode, payload);
+
+      return {
+        message: 'Data Enriched Successfully',
+        success: true,
+      };
+    } catch (error) {
+      this.loggerService.error(`Error in createEnrich: ${error.message}`, error.stack);
+
+      if (error instanceof BadRequestException || error instanceof NotFoundException) {
+        throw error;
+      }
     }
-
-    await this.db.ensureTableWithMetaData(endpoint.table_name);
-
-    const correlation_id = v4();
-    const payload: Enrichment[] = (Array.isArray(body.data) ? body.data : [body.data]).map((item) => ({
-      tenant_id: tenantId,
-      correlation_id,
-      data: item,
-      endpoint_id: endpoint.id,
-      checksum: createHash('sha256').update(JSON.stringify(item)).digest('hex'),
-    }));
-
-    await this.db.updateTableWithMetaData(endpoint.table_name, endpoint.mode, payload);
-
-    return {
-      message: 'Data Enriched Successfully',
-      success: true,
-    };
   }
 
   async getAllPullJobs(): Promise<Job[]> {

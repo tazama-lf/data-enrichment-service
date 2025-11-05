@@ -12,7 +12,7 @@ import { JobService } from './job.service';
 export class JobController {
   constructor(private jobService: JobService) {}
 
-  @Post('/tcs/*')
+  @Post('/*')
   @RequireEditorRole()
   async getEnrich(@Req() req: Request, @Body() body: CreateEnrichDataDto, @User() user: AuthenticatedUser) {
     return await this.jobService.createEnrich(req, body, user.token.tenantId);
