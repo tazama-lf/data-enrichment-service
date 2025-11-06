@@ -4,7 +4,7 @@ import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
 import { StartupFactory } from '@tazama-lf/frms-coe-startup-lib';
 import { ConfigType, PushJob } from '@tazama-lf/tcs-lib';
 import { DatabaseService } from '../database/database.service';
-import { ExecutorService } from '../executor/executor.service';
+import { JobService } from '../job/job.service';
 
 enum Status {
   ACK = 'ACK',
@@ -28,7 +28,7 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
     private readonly logger: LoggerService,
     private readonly redis: RedisService,
     private readonly db: DatabaseService,
-    private readonly executorService: ExecutorService,
+    private readonly jobService: JobService,
     private readonly configService: ConfigService,
   ) {
     this.cacheTtl = this.configService.get<number>('CACHE_TTL', 86400);
@@ -48,10 +48,12 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
       this.logger.log('NATS consumer initialized for config.notification');
 
       const query = `
-        SELECT *
-         FROM endpoints
-           WHERE status = 'deployed';
-          `;
+  SELECT *
+  FROM endpoints
+  WHERE 
+    status = 'deployed'
+    AND publishing_status = 'active';
+`;
 
       const result = await this.db.query(query);
       const configs = result.rows as PushJob[];
@@ -96,19 +98,7 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
           this.logger.log(`Config not found for ID: ${message.TxTp}`);
         }
       } else {
-        const query = `
-         SELECT 
-          j.*, 
-           s.cron,
-           s.start_date,
-           s.end_date
-            FROM job j
-             LEFT JOIN schedule s ON j.schedule_id = s.id
-              WHERE j.id = $1
-               LIMIT 1;
-          `;
-        const result = await this.db.query(query, [message.TxTp]);
-        await this.executorService.addCronJob(result.rows[0]);
+        await this.jobService.handleDailyJobCheck();
       }
 
       await handleResponse({

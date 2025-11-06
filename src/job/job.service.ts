@@ -1,8 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
-import { Enrichment, ISuccess, Job, JobStatus } from '@tazama-lf/tcs-lib';
+import { Enrichment, ISuccess, Job, JobStatus, ScheduleStatus } from '@tazama-lf/tcs-lib';
 import { CronJob } from 'cron';
 import { createHash } from 'crypto';
 import { Request } from 'express';
@@ -107,14 +107,17 @@ export class JobService implements OnModuleInit {
         endpoint = rows[0];
 
         if (!endpoint) {
-          throw new NotFoundException(`Endpoint '${path}' does not exist.`);
-        }
-        if (endpoint.status !== JobStatus.DEPLOYED) {
-          throw new BadRequestException('Endpoint not deployed');
+          throw new NotFoundException(`Endpoint '${path}' does not exist with tenant_id ${tenantId}`);
         }
 
         await this.redis.setJson(path, JSON.stringify(endpoint), this.cacheTtl);
         this.loggerService.log(`Cached endpoint for path: ${path}`);
+      }
+
+      const isNotDeployed = endpoint.status !== JobStatus.DEPLOYED;
+      const isNotActive = endpoint.publishing_status !== ScheduleStatus.ACTIVE;
+      if (isNotDeployed || isNotActive) {
+        throw new BadRequestException('Endpoint not deployed or not active.');
       }
 
       await this.db.ensureTableWithMetaData(endpoint.table_name);
@@ -140,26 +143,29 @@ export class JobService implements OnModuleInit {
       if (error instanceof BadRequestException || error instanceof NotFoundException) {
         throw error;
       }
+
+      throw new InternalServerErrorException('An unexpected error occurred while enriching data.');
     }
   }
 
   async getAllPullJobs(): Promise<Job[]> {
     const query = `
-    SELECT 
-      j.*, 
-      s.cron,
-      s.start_date,
-      s.end_date
-    FROM job j
-    LEFT JOIN schedule s ON j.schedule_id = s.id
-    WHERE 
-      j.status = 'deployed'
-      AND (
-        s.start_date::date = CURRENT_DATE
-        OR s.end_date::date = CURRENT_DATE
-      )
-    ORDER BY j.created_at DESC;
-  `;
+  SELECT 
+    j.*, 
+    s.cron,
+    s.start_date,
+    s.end_date
+  FROM job j
+  LEFT JOIN schedule s ON j.schedule_id = s.id
+  WHERE 
+    j.status = 'deployed'
+    AND j.publishing_status = 'active'
+    AND (
+      s.start_date::date = CURRENT_DATE
+      OR s.end_date::date = CURRENT_DATE
+    )
+  ORDER BY j.created_at DESC;
+`;
 
     const result = await this.db.query(query);
     return result.rows;
