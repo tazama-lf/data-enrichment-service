@@ -5,9 +5,10 @@ import { ExecutorModule } from '../executor/executor.module';
 import { LoggerModule } from '../logger-service/logger-service.module';
 import { RedisModule } from '../redis/redis.module';
 import { NotifyService } from './notify.service';
+import { JobModule } from '../job/job.module';
 
 @Module({
-  imports: [LoggerModule, ConfigModule, RedisModule, DatabaseModule, ExecutorModule],
+  imports: [LoggerModule, ConfigModule, RedisModule, DatabaseModule, ExecutorModule, JobModule],
   providers: [NotifyService],
 })
 export class NotifyModule {}
