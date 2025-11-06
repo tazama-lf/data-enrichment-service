@@ -131,7 +131,7 @@ export class JobService implements OnModuleInit {
         checksum: createHash('sha256').update(JSON.stringify(item)).digest('hex'),
       }));
 
-      await this.db.updateTableWithMetaData(endpoint.table_name, endpoint.mode, payload);
+      await this.db.updateTableWithMetaData(`${endpoint.tenant_id}_${endpoint.table_name}`, endpoint.mode, payload);
 
       return {
         message: 'Data Enriched Successfully',
