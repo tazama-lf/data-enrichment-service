@@ -95,6 +95,9 @@ export class JobService implements OnModuleInit {
 
       if (cachedEndpoint) {
         endpoint = JSON.parse(cachedEndpoint);
+        if (endpoint && endpoint.tenant_id === tenantId) {
+          throw new NotFoundException(`Endpoint '${path}' does not exist with tenant_id ${tenantId}`);
+        }
         this.loggerService.log(`Using endpoint from cache: ${path}`);
       } else {
         const query = `
