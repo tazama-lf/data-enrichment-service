@@ -120,8 +120,6 @@ export class JobService implements OnModuleInit {
         throw new BadRequestException('Endpoint not deployed or not active.');
       }
 
-      await this.db.ensureTableWithMetaData(endpoint.table_name);
-
       const correlation_id = v4();
       const payload: Enrichment[] = (Array.isArray(body.data) ? body.data : [body.data]).map((item) => ({
         tenant_id: tenantId,

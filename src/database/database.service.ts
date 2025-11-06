@@ -127,7 +127,7 @@ export class DatabaseService {
   }
 
   async updateTableWithMetaData(table_name: string, mode: IngestMode, data: Enrichment[]): Promise<void> {
-    await this.ensureTable(table_name);
+    await this.ensureTableWithMetaData(table_name);
 
     const rows = data.map((item) => ({
       id: v4(),

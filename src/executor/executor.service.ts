@@ -51,7 +51,7 @@ export class ExecutorService {
     const { data, status } = await firstValueFrom(this.httpService.get(httpCon.url, { headers: httpCon.headers }));
 
     if (status === 200 && typeof data === 'object') {
-      await this.db.updateTable(job.table_name, job.mode, data);
+      await this.db.updateTable(`${job.tenant_id}_${job.table_name}`, job.mode, data);
       await this.redis.set(jobKey, 0, CACHE_TTL);
     } else {
       await this.handleFailure(job, jobKey);
@@ -95,7 +95,7 @@ export class ExecutorService {
       if (!fileExists) throw new Error(`File ${file.path} not found on SFTP server`);
 
       const records = await this.transformFileToJSON(sftp, file);
-      await this.db.updateTable(job.table_name, job.mode, records);
+      await this.db.updateTable(`${job.tenant_id}_${job.table_name}`, job.mode, records);
 
       await this.redis.set(jobKey, 0, CACHE_TTL);
     } catch (error) {
