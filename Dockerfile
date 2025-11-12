@@ -10,7 +10,7 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM gcr.io/distroless/nodejs22-debian12:nonroot
+FROM node:22-alpine as runner
 WORKDIR /app
 
 # Copy only necessary artifacts
@@ -19,4 +19,4 @@ COPY --from=builder /app/dist ./dist
 COPY package*.json ./
 
 EXPOSE 3001
-CMD ["/app/dist/main.js"]
+CMD ["node", "/app/dist/main.js"]
