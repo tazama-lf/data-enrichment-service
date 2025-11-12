@@ -1,22 +1,24 @@
+# SPDX-License-Identifier: Apache-2.0
+
 FROM node:22-alpine AS builder
+
 WORKDIR /app
 
-# Install dependencies
 COPY package*.json ./
-COPY .npmrc ./
+COPY .npmrc .npmrc ./
 RUN npm ci
-
-# Copy and build
 COPY . .
+
 RUN npm run build
 
-FROM node:22-alpine as runner
+FROM node:22-alpine
 WORKDIR /app
 
-# Copy only necessary artifacts
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY package*.json ./
+COPY tsconfig.json ./
 
 EXPOSE 3001
-CMD ["node", "/app/dist/main.js"]
+
+CMD ["npm", "run", "start:dev"]
