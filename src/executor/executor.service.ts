@@ -11,6 +11,7 @@ import { AuthType, FileType, SourceType, FileSettings, HTTPConnection, Job, SFTP
 import { CACHE_TTL } from '../utils/constants';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { ApmSpan } from '../apm/apm.decorators';
 @Injectable()
 export class ExecutorService {
   constructor(
@@ -21,6 +22,7 @@ export class ExecutorService {
     private readonly httpService: HttpService,
   ) {}
 
+  @ApmSpan('data-pull-failure')
   private async handleFailure(job: Job, jobKey: string): Promise<void> {
     const currentFailures = (await this.redis.getMemberValues(jobKey)[0]) ?? 0;
     const newFailures = currentFailures + 1;
@@ -33,6 +35,7 @@ export class ExecutorService {
     }
   }
 
+  @ApmSpan('data-pull-run')
   private async run(job: Job, jobKey: string): Promise<void> {
     try {
       if (job.source_type === SourceType.HTTP) {
@@ -46,6 +49,7 @@ export class ExecutorService {
     }
   }
 
+  @ApmSpan('data-pull-http')
   private async handleHttpJob(job: Job, jobKey: string): Promise<void> {
     const httpCon = job.connection as HTTPConnection;
     const { data, status } = await firstValueFrom(this.httpService.get(httpCon.url, { headers: httpCon.headers }));
@@ -58,6 +62,7 @@ export class ExecutorService {
     }
   }
 
+  @ApmSpan('sftp-connection')
   async createSftpConnection(sftpCon: SFTPConnection): Promise<SFTPClient> {
     const sftp = new SFTPClient();
     try {
@@ -82,6 +87,7 @@ export class ExecutorService {
     }
   }
 
+  @ApmSpan('data-pull-sftp')
   private async handleSftpJob(job: Job, jobKey: string): Promise<void> {
     const sftpCon = job.connection as SFTPConnection;
     const file = job.file;
@@ -106,6 +112,7 @@ export class ExecutorService {
     }
   }
 
+  @ApmSpan('transform-file-json')
   async transformFileToJSON(sftp: SFTPClient, file: FileSettings): Promise<Record<string, unknown>[]> {
     try {
       const buffer = await sftp.get(file.path);
@@ -154,6 +161,7 @@ export class ExecutorService {
     }
   }
 
+  @ApmSpan('cron-job-schedule')
   async addCronJob(job: Job): Promise<void> {
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const jobKey = `job-${job.id}-schedule-${job.schedule_id}`;
