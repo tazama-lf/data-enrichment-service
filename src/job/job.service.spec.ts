@@ -223,9 +223,8 @@ describe('JobService', () => {
         mockRedisService.getJson.mockResolvedValue(null);
         mockDatabaseService.query.mockResolvedValue({ rows: [] } as never);
 
-        const path = '/tcs/test-endpoint';
         await expect(service.createEnrich(mockRequest as Request, mockBody, 'tenant_456')).rejects.toMatchObject({
-          message: `Endpoint ${path} does not exist with tenant_id tenant_456`,
+          message: 'Endpoint /tcs/test-endpoint does not exist with tenant_id tenant_456',
         });
       });
 
@@ -233,9 +232,8 @@ describe('JobService', () => {
         const wrongTenantEndpoint = { ...mockEndpoint, tenant_id: 'different-tenant' };
         mockRedisService.getJson.mockResolvedValue(JSON.stringify(wrongTenantEndpoint));
 
-        const path = '/tcs/test-endpoint';
         await expect(service.createEnrich(mockRequest as Request, mockBody, 'tenant_456')).rejects.toMatchObject({
-          message: `Endpoint ${path} does not exist with tenant_id tenant_456`,
+          message: 'Endpoint /tcs/test-endpoint does not exist with tenant_id tenant_456',
         });
       });
 
