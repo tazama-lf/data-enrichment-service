@@ -2,18 +2,13 @@ import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
 import { StartupFactory } from '@tazama-lf/frms-coe-startup-lib';
-import { ConfigType, PushJob } from '@tazama-lf/tcs-lib';
+import { ConfigType, Job, PushJob } from '@tazama-lf/tcs-lib';
 import { DatabaseService } from '../database/database.service';
-import { JobService } from '../job/job.service';
+import { ExecutorService } from '../executor/executor.service';
 
 enum Status {
   ACK = 'ACK',
   NACK = 'NACK',
-}
-
-interface NatsMessage {
-  TenantId: string;
-  TxTp: string;
 }
 
 @Injectable()
@@ -28,7 +23,7 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
     private readonly logger: LoggerService,
     private readonly redis: RedisService,
     private readonly db: DatabaseService,
-    private readonly jobService: JobService,
+    private readonly executorService: ExecutorService,
     private readonly configService: ConfigService,
   ) {
     this.cacheTtl = this.configService.get<number>('CACHE_TTL', 86400);
@@ -51,7 +46,7 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
   SELECT *
   FROM endpoints
   WHERE 
-    status = 'deployed'
+     status IN ('deployed', 'exported')
     AND publishing_status = 'active';
 `;
 
@@ -75,44 +70,74 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
   }
 
   async handleNatsMessage(reqObj: unknown, handleResponse: (response: object) => Promise<void>): Promise<void> {
-    const message = reqObj as NatsMessage;
-
-    this.logger.log(`RECEIVING MESSAGE ${JSON.stringify(message)}`);
+    const { dataPayload } = reqObj as { dataPayload: string };
+    this.logger.log(`RECEIVING MESSAGE ${dataPayload}`);
 
     try {
-      if ((message.TenantId as ConfigType) === ConfigType.PUSH) {
-        const query = `
+      const payload = JSON.parse(dataPayload) as {
+        endpoint_id: string;
+        config_type: ConfigType;
+      };
+
+      const { endpoint_id, config_type } = payload;
+
+      const query =
+        config_type === ConfigType.PUSH
+          ? `
           SELECT *
-            FROM endpoints
-             WHERE id = $1
-              LIMIT 1;
-          `;
+          FROM endpoints
+          WHERE id = $1
+          LIMIT 1;
+        `
+          : `
+          SELECT 
+              j.*, 
+              s.cron,
+              s.start_date,
+              s.end_date
+          FROM job j
+          LEFT JOIN schedule s ON j.schedule_id = s.id
+          WHERE 
+              j.id = $1
+              AND j.status = 'deployed'
+              AND j.publishing_status = 'active'
+              AND (
+                  s.start_date::date = CURRENT_DATE
+                  OR s.end_date::date = CURRENT_DATE
+              )
+          ORDER BY j.created_at DESC
+          LIMIT 1;
+        `;
 
-        const result = await this.db.query(query, [message.TxTp]);
-        const config = result.rows[0] as PushJob | undefined;
+      const result = await this.db.query(query, [endpoint_id]);
+      const record = result.rows[0] as PushJob | Job;
 
-        if (config) {
-          await this.redis.setJson(config.path, JSON.stringify(config), this.cacheTtl);
-          this.logger.log(`Updated cache for key: ${config.path}`);
-        } else {
-          this.logger.log(`Config not found for ID: ${message.TxTp}`);
-        }
+      if (!record) {
+        this.logger.warn(`No configuration found for ID: ${endpoint_id}`);
+      } else if (config_type === ConfigType.PUSH) {
+        await this.redis.setJson(record.path, JSON.stringify(record), this.cacheTtl);
+        this.logger.log(`Updated cache for key: ${record.path}`);
       } else {
-        await this.jobService.handleDailyJobCheck();
+        await this.executorService.addCronJob(record as Job);
       }
 
       await handleResponse({
-        TxTp: message.TxTp,
+        endpoint_id,
         status: Status.ACK,
         timestamp: new Date().toISOString(),
       });
-      this.logger.log(`Transaction successfully done : ${message.TxTp}`);
+
+      this.logger.log(`Transaction successfully done: ${endpoint_id}`);
     } catch (error) {
-      this.logger.error(`Error processing message: ${String(error)}`);
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Error processing message: ${message}`);
+
+      const payload = (reqObj as any)?.dataPayload ? JSON.parse((reqObj as any).dataPayload) : { endpoint_id: 'unknown' };
+
       await handleResponse({
-        TxTp: message.TxTp,
+        endpoint_id: payload.endpoint_id,
         status: Status.NACK,
-        error: error instanceof Error ? error.message : String(error),
+        error: message,
         timestamp: new Date().toISOString(),
       });
     }
