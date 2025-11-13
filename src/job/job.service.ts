@@ -39,7 +39,7 @@ export class JobService {
         endpoint = JSON.parse(cachedEndpoint);
 
         if (endpoint && endpoint.tenant_id !== tenantId) {
-          throw new NotFoundException(`Endpoint '${path}' does not exist with tenant_id ${tenantId}`);
+          throw new NotFoundException(`Endpoint ${path} does not exist with tenant_id ${tenantId}`);
         }
         this.loggerService.log(`Using endpoint from cache: ${path}`);
       } else {
@@ -53,7 +53,7 @@ export class JobService {
         endpoint = rows[0];
 
         if (!endpoint) {
-          throw new NotFoundException(`Endpoint '${path}' does not exist with tenant_id ${tenantId}`);
+          throw new NotFoundException(`Endpoint ${path} does not exist with tenant_id ${tenantId}`);
         }
 
         await this.redis.setJson(path, JSON.stringify(endpoint), this.cacheTtl);
