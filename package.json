@@ -39,7 +39,7 @@
     "@nestjs/schedule": "^6.0.1",
     "@tazama-lf/auth-lib": "^2.1.0",
     "@tazama-lf/frms-coe-lib": "^6.0.0-proto.0",
-    "@tazama-lf/frms-coe-startup-lib": "3.0.0",
+    "@tazama-lf/frms-coe-startup-lib": "^3.0.0",
     "@tazama-lf/tcs-lib": "^1.0.22",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
