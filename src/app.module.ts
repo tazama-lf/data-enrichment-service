@@ -10,6 +10,7 @@ import { LoggerModule } from './logger-service/logger-service.module';
 import { NotifyModule } from './notify/notify.module';
 import { RedisModule } from './redis/redis.module';
 import { AuthModule } from './auth/auth.module';
+import { ApmModule } from './apm/apm.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { AuthModule } from './auth/auth.module';
     RedisModule,
     NotifyModule,
     AuthModule,
+    ApmModule,
   ],
   controllers: [AppController],
   providers: [AppService],
