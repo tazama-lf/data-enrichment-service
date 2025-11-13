@@ -1,5 +1,4 @@
 import * as crypto from 'crypto';
-import { CronTime } from 'cron';
 
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
 const buffer = Buffer.from(`${ENCRYPTION_KEY}`, 'utf8');
@@ -15,16 +14,6 @@ export function decrypt(text: string) {
   return decrypted;
 }
 
-export function getNextTime(cronExp: string) {
-  const cronTime = new CronTime(cronExp);
-  const nextDate = cronTime.sendAt();
-  return nextDate.toISO();
-}
-
 export function isValidText(text: string): boolean {
   return !/�{3,}/.test(text);
-}
-
-export function isSameDay(date1: Date, date2: Date): boolean {
-  return date1.getFullYear() === date2.getFullYear() && date1.getMonth() === date2.getMonth() && date1.getDate() === date2.getDate();
 }
