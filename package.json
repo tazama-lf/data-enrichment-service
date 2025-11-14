@@ -25,10 +25,7 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json",
-    "migrate:make": "knex --knexfile knex/knexfile.ts migrate:make",
-    "migrate:latest": "knex --knexfile knex/knexfile.ts migrate:latest",
-    "migrate:rollback": "knex --knexfile knex/knexfile.ts migrate:rollback"
+    "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
     "@nestjs/axios": "^4.0.1",
@@ -40,7 +37,7 @@
     "@tazama-lf/auth-lib": "^2.1.0",
     "@tazama-lf/frms-coe-lib": "6.0.0-proto.0",
     "@tazama-lf/frms-coe-startup-lib": "3.0.0-proto.0",
-    "@tazama-lf/tcs-lib": "^1.0.22",
+    "@tazama-lf/tcs-lib": "^1.0.24",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "bcrypt": "^6.0.0",

@@ -46,7 +46,7 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
   SELECT *
   FROM endpoints
   WHERE 
-     status IN ('deployed', 'exported')
+     status IN ('STATUS_08_DEPLOYED', 'STATUS_06_EXPORTED')
     AND publishing_status = 'active';
 `;
 
@@ -99,7 +99,7 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
           LEFT JOIN schedule s ON j.schedule_id = s.id
           WHERE 
               j.id = $1
-              AND j.status = 'deployed'
+              AND j.status = 'STATUS_08_DEPLOYED'
               AND j.publishing_status = 'active'
               AND (
                   s.start_date::date = CURRENT_DATE
