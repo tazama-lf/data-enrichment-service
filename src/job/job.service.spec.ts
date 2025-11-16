@@ -1,4 +1,4 @@
-import { BadRequestException, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
@@ -124,7 +124,7 @@ describe('JobService', () => {
       });
 
       it('should successfully enrich data from database when not in cache', async () => {
-        mockRedisService.getJson.mockResolvedValue(null);
+        mockRedisService.getJson.mockResolvedValue('');
         mockDatabaseService.query.mockResolvedValue({
           rows: [mockEndpoint],
         } as never);
@@ -220,7 +220,7 @@ describe('JobService', () => {
 
     describe('Endpoint validation', () => {
       it('should throw NotFoundException when endpoint does not exist in cache or database', async () => {
-        mockRedisService.getJson.mockResolvedValue(null);
+        mockRedisService.getJson.mockResolvedValue('');
         mockDatabaseService.query.mockResolvedValue({ rows: [] } as never);
 
         await expect(service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' })).rejects.toMatchObject({
@@ -271,7 +271,7 @@ describe('JobService', () => {
 
     describe('Error handling', () => {
       it('should throw InternalServerErrorException for unexpected database errors', async () => {
-        mockRedisService.getJson.mockResolvedValue(null);
+        mockRedisService.getJson.mockResolvedValue('');
         mockDatabaseService.query.mockRejectedValue(new Error('Database connection failed'));
 
         await expect(service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' })).rejects.toThrow(
@@ -299,7 +299,7 @@ describe('JobService', () => {
           new InternalServerErrorException('An unexpected error occurred while enriching data.'),
         );
 
-        expect(mockLoggerService.error).toHaveBeenCalledWith(expect.stringContaining('Error in createEnrich'), expect.any(String));
+        expect(mockLoggerService.error).toHaveBeenCalledWith(expect.stringContaining('Error in createEnrich'));
       });
 
       it('should not wrap BadRequestException in InternalServerErrorException', async () => {
@@ -312,98 +312,85 @@ describe('JobService', () => {
           InternalServerErrorException,
         );
       });
-
-      it('should not wrap NotFoundException in InternalServerErrorException', async () => {
-        mockRedisService.getJson.mockResolvedValue(null);
-        mockDatabaseService.query.mockResolvedValue({ rows: [] } as never);
-
-        await expect(service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' })).rejects.toThrow(
-          NotFoundException,
-        );
-        await expect(service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' })).rejects.not.toThrow(
-          InternalServerErrorException,
-        );
-      });
-    });
-
-    describe('Data transformation', () => {
-      it('should handle complex nested objects', async () => {
-        mockRedisService.getJson.mockResolvedValue(JSON.stringify(mockEndpoint));
-        const complexBody: CreateEnrichDataDto = {
-          data: {
-            user: {
-              name: 'John',
-              address: {
-                city: 'NYC',
-                zip: '10001',
+      describe('Data transformation', () => {
+        it('should handle complex nested objects', async () => {
+          mockRedisService.getJson.mockResolvedValue(JSON.stringify(mockEndpoint));
+          const complexBody: CreateEnrichDataDto = {
+            data: {
+              user: {
+                name: 'John',
+                address: {
+                  city: 'NYC',
+                  zip: '10001',
+                },
+              },
+              metadata: {
+                timestamp: '2025-01-01T00:00:00Z',
               },
             },
-            metadata: {
-              timestamp: '2025-01-01T00:00:00Z',
+          };
+
+          const result = await service.createEnrich({ req: mockRequest as Request, body: complexBody, tenantId: 'tenant_456' });
+
+          expect(result.success).toBe(true);
+          const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][2] as Array<{
+            data: Record<string, unknown>;
+          }>;
+          expect(callArgs[0].data).toEqual(complexBody.data);
+        });
+
+        it('should preserve data types in payload', async () => {
+          mockRedisService.getJson.mockResolvedValue(JSON.stringify(mockEndpoint));
+          const typedBody: CreateEnrichDataDto = {
+            data: {
+              string: 'text',
+              number: 123,
+              boolean: true,
+              null_value: null,
+              array: [1, 2, 3],
             },
-          },
-        };
+          };
 
-        const result = await service.createEnrich({ req: mockRequest as Request, body: complexBody, tenantId: 'tenant_456' });
+          await service.createEnrich({ req: mockRequest as Request, body: typedBody, tenantId: 'tenant_456' });
 
-        expect(result.success).toBe(true);
-        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][2] as Array<{
-          data: Record<string, unknown>;
-        }>;
-        expect(callArgs[0].data).toEqual(complexBody.data);
+          const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][2] as Array<{
+            data: Record<string, unknown>;
+          }>;
+          expect(callArgs[0].data).toEqual(typedBody.data);
+        });
       });
 
-      it('should preserve data types in payload', async () => {
-        mockRedisService.getJson.mockResolvedValue(JSON.stringify(mockEndpoint));
-        const typedBody: CreateEnrichDataDto = {
-          data: {
-            string: 'text',
-            number: 123,
-            boolean: true,
-            null_value: null,
-            array: [1, 2, 3],
-          },
-        };
+      describe('Caching behavior', () => {
+        it('should cache endpoint after fetching from database', async () => {
+          mockRedisService.getJson.mockResolvedValue('');
+          mockDatabaseService.query.mockResolvedValue({ rows: [mockEndpoint] } as never);
 
-        await service.createEnrich({ req: mockRequest as Request, body: typedBody, tenantId: 'tenant_456' });
+          await service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
 
-        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][2] as Array<{
-          data: Record<string, unknown>;
-        }>;
-        expect(callArgs[0].data).toEqual(typedBody.data);
-      });
-    });
+          expect(mockRedisService.setJson).toHaveBeenCalledWith('/tcs/test-endpoint', JSON.stringify(mockEndpoint), 86400);
+        });
 
-    describe('Caching behavior', () => {
-      it('should cache endpoint after fetching from database', async () => {
-        mockRedisService.getJson.mockResolvedValue(null);
-        mockDatabaseService.query.mockResolvedValue({ rows: [mockEndpoint] } as never);
+        it('should not query database when endpoint is in cache', async () => {
+          mockRedisService.getJson.mockResolvedValue(JSON.stringify(mockEndpoint));
 
-        await service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
+          await service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
 
-        expect(mockRedisService.setJson).toHaveBeenCalledWith('/tcs/test-endpoint', JSON.stringify(mockEndpoint), 86400);
+          expect(mockDatabaseService.query).not.toHaveBeenCalled();
+        });
       });
 
-      it('should not query database when endpoint is in cache', async () => {
-        mockRedisService.getJson.mockResolvedValue(JSON.stringify(mockEndpoint));
+      describe('Table naming', () => {
+        it('should use correct table name with tenant_id prefix', async () => {
+          mockRedisService.getJson.mockResolvedValue(JSON.stringify(mockEndpoint));
 
-        await service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
+          await service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
 
-        expect(mockDatabaseService.query).not.toHaveBeenCalled();
-      });
-    });
-
-    describe('Table naming', () => {
-      it('should use correct table name with tenant_id prefix', async () => {
-        mockRedisService.getJson.mockResolvedValue(JSON.stringify(mockEndpoint));
-
-        await service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
-
-        expect(mockDatabaseService.updateTableWithMetaData).toHaveBeenCalledWith(
-          'tenant_456_test_table',
-          expect.any(String),
-          expect.any(Array),
-        );
+          expect(mockDatabaseService.updateTableWithMetaData).toHaveBeenCalledWith(
+            'tenant_456_test_table',
+            expect.any(String),
+            expect.any(Array),
+          );
+        });
       });
     });
   });

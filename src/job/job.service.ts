@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
 import { Enrichment, ISuccess, JobStatus, ScheduleStatus } from '@tazama-lf/tcs-lib';
@@ -20,12 +20,6 @@ export class JobService {
     private readonly redis: RedisService,
   ) {
     this.cacheTtl = this.configService.get<number>('CACHE_TTL', 86400);
-  }
-
-  private handleError(err: unknown): never {
-    const message = err instanceof Error ? err.message : String(err);
-    this.loggerService.error(message);
-    throw new BadRequestException(message);
   }
 
   @ApmSpan('data-enrichment-push')
@@ -87,8 +81,15 @@ export class JobService {
         message: 'Data Enriched Successfully',
         success: true,
       };
-    } catch (error) {
-      this.handleError(error);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.loggerService.error(`Error in createEnrich: ${message}`);
+
+      if (error instanceof BadRequestException || error instanceof NotFoundException) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException('An unexpected error occurred while enriching data.');
     }
   }
 }
