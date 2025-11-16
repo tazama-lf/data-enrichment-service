@@ -118,7 +118,7 @@ export class ExecutorService {
       this.loggerService.error(`SFTP error: ${message}`);
       await this.handleFailure(job, jobKey);
     } finally {
-      sftp.end();
+      await sftp.end();
     }
   }
 

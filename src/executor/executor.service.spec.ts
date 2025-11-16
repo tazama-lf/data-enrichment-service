@@ -8,7 +8,7 @@ import { DatabaseService } from '../database/database.service';
 import { ExecutorService } from './executor.service';
 import { of, throwError } from 'rxjs';
 import SFTPClient from 'ssh2-sftp-client';
-import * as utils from '../utils/helpers';
+import { ConfigService } from '@nestjs/config';
 
 jest.mock('../apm/apm.decorators', () => ({
   ApmSpan: () => (target: unknown, propertyKey: string, descriptor: PropertyDescriptor) => descriptor,
@@ -16,7 +16,10 @@ jest.mock('../apm/apm.decorators', () => ({
 
 jest.mock('ssh2-sftp-client');
 
-jest.spyOn(utils, 'decrypt').mockReturnValue('password');
+jest.mock('../utils/helpers', () => ({
+  decrypt: jest.fn((value: string) => value.replace('encrypted:', '')),
+  isValidText: jest.fn(() => true),
+}));
 
 describe('ExecutorService', () => {
   let service: ExecutorService;
@@ -25,6 +28,8 @@ describe('ExecutorService', () => {
   let mockRedisService: jest.Mocked<RedisService>;
   let mockHttpService: jest.Mocked<HttpService>;
   let mockSchedulerRegistry: jest.Mocked<SchedulerRegistry>;
+  let mockConfigService: jest.Mocked<ConfigService>;
+  let mockSftpClient: jest.Mocked<SFTPClient>;
 
   const mockJob: Job = {
     id: 'job-123',
@@ -40,9 +45,7 @@ describe('ExecutorService', () => {
       url: 'https://api.example.com/data',
       headers: { Authorization: 'Bearer token' },
     },
-    file: null,
     start_date: new Date(),
-    end_date: null,
     status: JobStatus.DEPLOYED,
     endpoint_name: 'test-endpoint',
     description: 'Test job',
@@ -65,9 +68,13 @@ describe('ExecutorService', () => {
       ensureTable: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<DatabaseService>;
 
+    mockConfigService = {
+      get: jest.fn().mockReturnValue(86400),
+    } as unknown as jest.Mocked<ConfigService>;
+
     mockRedisService = {
       set: jest.fn().mockResolvedValue(undefined),
-      getMemberValues: jest.fn().mockReturnValue([0]),
+      getJson: jest.fn().mockResolvedValue('1'),
       get: jest.fn().mockResolvedValue(null),
     } as unknown as jest.Mocked<RedisService>;
 
@@ -82,6 +89,15 @@ describe('ExecutorService', () => {
       deleteCronJob: jest.fn(),
     } as unknown as jest.Mocked<SchedulerRegistry>;
 
+    mockSftpClient = {
+      connect: jest.fn().mockResolvedValue(undefined),
+      exists: jest.fn().mockResolvedValue(true),
+      get: jest.fn().mockResolvedValue(Buffer.from('{"key":"value"}')),
+      end: jest.fn(),
+    } as unknown as jest.Mocked<SFTPClient>;
+
+    (SFTPClient as jest.MockedClass<typeof SFTPClient>).mockImplementation(() => mockSftpClient);
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ExecutorService,
@@ -90,6 +106,7 @@ describe('ExecutorService', () => {
         { provide: RedisService, useValue: mockRedisService },
         { provide: HttpService, useValue: mockHttpService },
         { provide: SchedulerRegistry, useValue: mockSchedulerRegistry },
+        { provide: ConfigService, useValue: mockConfigService },
       ],
     }).compile();
 
@@ -207,7 +224,7 @@ describe('ExecutorService', () => {
 
       await service['handleHttpJob'](httpJob, 'job-key');
 
-      expect(mockRedisService.getMemberValues).toHaveBeenCalledWith('job-key');
+      expect(mockRedisService.getJson).toHaveBeenCalledWith('job-key');
       expect(mockDatabaseService.updateTable).not.toHaveBeenCalled();
     });
 
@@ -225,7 +242,7 @@ describe('ExecutorService', () => {
 
       await service['handleHttpJob'](httpJob, 'job-key');
 
-      expect(mockRedisService.getMemberValues).toHaveBeenCalledWith('job-key');
+      expect(mockRedisService.getJson).toHaveBeenCalledWith('job-key');
       expect(mockDatabaseService.updateTable).not.toHaveBeenCalled();
     });
 
@@ -238,16 +255,6 @@ describe('ExecutorService', () => {
   });
 
   describe('createSftpConnection', () => {
-    let mockSftpClient: jest.Mocked<SFTPClient>;
-
-    beforeEach(() => {
-      mockSftpClient = {
-        connect: jest.fn().mockResolvedValue(undefined),
-        end: jest.fn(),
-      } as unknown as jest.Mocked<SFTPClient>;
-      SFTPClient.mockImplementation(() => mockSftpClient);
-    });
-
     it('should create SFTP connection with username/password', async () => {
       const sftpConnection = {
         host: 'sftp.example.com',
@@ -261,7 +268,12 @@ describe('ExecutorService', () => {
       const result = await service.createSftpConnection(sftpConnection);
 
       expect(result).toBe(mockSftpClient);
-      expect(mockSftpClient.connect).toHaveBeenCalled();
+      expect(mockSftpClient.connect).toHaveBeenCalledWith({
+        host: 'sftp.example.com',
+        port: 22,
+        username: 'testuser',
+        password: 'password',
+      });
     });
 
     it('should create SFTP connection with private key', async () => {
@@ -277,7 +289,12 @@ describe('ExecutorService', () => {
       const result = await service.createSftpConnection(sftpConnection);
 
       expect(result).toBe(mockSftpClient);
-      expect(mockSftpClient.connect).toHaveBeenCalled();
+      expect(mockSftpClient.connect).toHaveBeenCalledWith({
+        host: 'sftp.example.com',
+        port: 22,
+        username: 'testuser',
+        privateKey: 'privatekey',
+      });
     });
 
     it('should throw error when SFTP connection fails', async () => {
@@ -296,18 +313,6 @@ describe('ExecutorService', () => {
   });
 
   describe('handleSftpJob', () => {
-    let mockSftpClient: jest.Mocked<SFTPClient>;
-
-    beforeEach(() => {
-      mockSftpClient = {
-        connect: jest.fn().mockResolvedValue(undefined),
-        exists: jest.fn().mockResolvedValue(true),
-        get: jest.fn().mockResolvedValue(Buffer.from('{"key":"value"}')),
-        end: jest.fn(),
-      } as unknown as jest.Mocked<SFTPClient>;
-      SFTPClient.mockImplementation(() => mockSftpClient);
-    });
-
     it('should successfully process SFTP job with JSON file', async () => {
       const sftpJob: Job = {
         ...mockJob,
@@ -335,7 +340,7 @@ describe('ExecutorService', () => {
       expect(mockSftpClient.end).toHaveBeenCalled();
     });
 
-    it('should throw error when file path is missing', async () => {
+    it('should handle error when file path is missing', async () => {
       const sftpJob: Job = {
         ...mockJob,
         source_type: SourceType.SFTP,
@@ -347,16 +352,16 @@ describe('ExecutorService', () => {
           password: 'encrypted:password',
           private_key: '',
         },
-        file: null,
       };
 
       await service['handleSftpJob'](sftpJob, 'job-key');
 
       expect(mockLoggerService.error).toHaveBeenCalledWith('SFTP error: File path not provided in job config');
+      expect(mockRedisService.getJson).toHaveBeenCalledWith('job-key');
       expect(mockSftpClient.end).toHaveBeenCalled();
     });
 
-    it('should throw error when file does not exist', async () => {
+    it('should handle error when file does not exist', async () => {
       mockSftpClient.exists.mockResolvedValue(false);
       const sftpJob: Job = {
         ...mockJob,
@@ -378,19 +383,12 @@ describe('ExecutorService', () => {
       await service['handleSftpJob'](sftpJob, 'job-key');
 
       expect(mockLoggerService.error).toHaveBeenCalledWith('SFTP error: File /data/missing.json not found on SFTP server');
+      expect(mockRedisService.getJson).toHaveBeenCalledWith('job-key');
       expect(mockSftpClient.end).toHaveBeenCalled();
     });
   });
 
   describe('transformFileToJSON', () => {
-    let mockSftpClient: jest.Mocked<SFTPClient>;
-
-    beforeEach(() => {
-      mockSftpClient = {
-        get: jest.fn(),
-      } as unknown as jest.Mocked<SFTPClient>;
-    });
-
     it('should transform JSON file to array of objects', async () => {
       mockSftpClient.get.mockResolvedValue(Buffer.from('{"name":"test","value":123}'));
       const file = { path: '/data/test.json', file_type: FileType.JSON, delimiter: '' };
@@ -470,13 +468,16 @@ describe('ExecutorService', () => {
 
   describe('handleFailure', () => {
     it('should increment failure count', async () => {
+      mockRedisService.getJson.mockResolvedValue('0');
+
       await service['handleFailure'](mockJob, 'job-key');
 
+      expect(mockRedisService.getJson).toHaveBeenCalledWith('job-key');
       expect(mockRedisService.set).toHaveBeenCalledWith('job-key', 1, 86400);
     });
 
     it('should stop and delete job when iterations limit reached', async () => {
-      mockRedisService.getMemberValues.mockReturnValue([2] as unknown as Promise<Record<string, unknown>[]>);
+      mockRedisService.getJson.mockResolvedValue('2');
       const mockCronJob = {
         stop: jest.fn().mockResolvedValue(undefined),
       };
@@ -490,19 +491,21 @@ describe('ExecutorService', () => {
     });
 
     it('should not stop job when iterations limit not reached', async () => {
-      mockRedisService.getMemberValues.mockReturnValue([1] as unknown as Promise<Record<string, unknown>[]>);
+      mockRedisService.getJson.mockResolvedValue('1');
 
       await service['handleFailure'](mockJob, 'job-key');
 
+      expect(mockRedisService.set).toHaveBeenCalledWith('job-key', 2, 86400);
       expect(mockSchedulerRegistry.deleteCronJob).not.toHaveBeenCalled();
     });
 
     it('should handle job with no iterations limit', async () => {
       const jobWithoutIterations = { ...mockJob, iterations: undefined };
-      mockRedisService.getMemberValues.mockReturnValue([5] as unknown as Promise<Record<string, unknown>[]>);
+      mockRedisService.getJson.mockResolvedValue('5');
 
       await service['handleFailure'](jobWithoutIterations, 'job-key');
 
+      expect(mockRedisService.set).toHaveBeenCalledWith('job-key', 6, 86400);
       expect(mockSchedulerRegistry.deleteCronJob).not.toHaveBeenCalled();
     });
   });
@@ -523,17 +526,10 @@ describe('ExecutorService', () => {
       await service['run'](httpJob, 'job-key');
 
       expect(mockHttpService.get).toHaveBeenCalled();
+      expect(mockDatabaseService.updateTable).toHaveBeenCalled();
     });
 
     it('should execute SFTP job successfully', async () => {
-      const mockSftpClient = {
-        connect: jest.fn().mockResolvedValue(undefined),
-        exists: jest.fn().mockResolvedValue(true),
-        get: jest.fn().mockResolvedValue(Buffer.from('{"key":"value"}')),
-        end: jest.fn(),
-      } as unknown as jest.Mocked<SFTPClient>;
-      SFTPClient.mockImplementation(() => mockSftpClient);
-
       const sftpJob: Job = {
         ...mockJob,
         source_type: SourceType.SFTP,
@@ -554,6 +550,7 @@ describe('ExecutorService', () => {
       await service['run'](sftpJob, 'job-key');
 
       expect(mockSftpClient.connect).toHaveBeenCalled();
+      expect(mockDatabaseService.updateTable).toHaveBeenCalled();
     });
 
     it('should handle job execution errors', async () => {
@@ -562,7 +559,8 @@ describe('ExecutorService', () => {
 
       await service['run'](httpJob, 'job-key');
 
-      expect(mockLoggerService.error).toHaveBeenCalledWith('Failed to execute job : Execution failed');
+      expect(mockLoggerService.error).toHaveBeenCalledWith('Execution failed');
+      expect(mockRedisService.getJson).toHaveBeenCalledWith('job-key');
     });
   });
 });
