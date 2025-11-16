@@ -1,32 +1,38 @@
+import { HttpService } from '@nestjs/axios';
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
+import { AuthType, FileSettings, FileType, HTTPConnection, Job, SFTPConnection, SourceType } from '@tazama-lf/tcs-lib';
 import { CronJob } from 'cron';
 import { parse } from 'csv-parse/sync';
 import * as iconv from 'iconv-lite';
+import { firstValueFrom } from 'rxjs';
 import SFTPClient from 'ssh2-sftp-client';
+import { ApmSpan } from '../apm/apm.decorators';
 import { DatabaseService } from '../database/database.service';
 import { decrypt, isValidText } from '../utils/helpers';
-import { AuthType, FileType, SourceType, FileSettings, HTTPConnection, Job, SFTPConnection } from '@tazama-lf/tcs-lib';
-import { CACHE_TTL } from '../utils/constants';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
-import { ApmSpan } from '../apm/apm.decorators';
 @Injectable()
 export class ExecutorService {
+  private readonly cacheTtl: number;
+
   constructor(
     private readonly schedulerRegistry: SchedulerRegistry,
     private readonly loggerService: LoggerService,
     private readonly db: DatabaseService,
     private readonly redis: RedisService,
+    private readonly configService: ConfigService,
     private readonly httpService: HttpService,
-  ) {}
+  ) {
+    this.cacheTtl = this.configService.get<number>('CACHE_TTL', 86400);
+  }
 
   @ApmSpan('data-pull-failure')
   private async handleFailure(job: Job, jobKey: string): Promise<void> {
-    const currentFailures = (await this.redis.getMemberValues(jobKey)[0]) ?? 0;
-    const newFailures = currentFailures + 1;
-    await this.redis.set(jobKey, newFailures, CACHE_TTL);
+    const value = await this.redis.getJson(jobKey);
+    const currentFailures = value ?? 0;
+    const newFailures = parseInt(currentFailures) + 1;
+    await this.redis.set(jobKey, newFailures, this.cacheTtl);
 
     if (job.iterations && newFailures >= job.iterations) {
       const cronJob = this.schedulerRegistry.getCronJob(jobKey);
@@ -43,8 +49,9 @@ export class ExecutorService {
       } else {
         await this.handleSftpJob(job, jobKey);
       }
-    } catch (error) {
-      this.loggerService.error(`Failed to execute job : ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.loggerService.error(message);
       await this.handleFailure(job, jobKey);
     }
   }
@@ -56,7 +63,7 @@ export class ExecutorService {
 
     if (status === 200 && typeof data === 'object') {
       await this.db.updateTable(`${job.tenant_id}_${job.table_name}`, job.mode, data);
-      await this.redis.set(jobKey, 0, CACHE_TTL);
+      await this.redis.set(jobKey, 0, this.cacheTtl);
     } else {
       await this.handleFailure(job, jobKey);
     }
@@ -66,14 +73,14 @@ export class ExecutorService {
   async createSftpConnection(sftpCon: SFTPConnection): Promise<SFTPClient> {
     const sftp = new SFTPClient();
     try {
-      if (sftpCon.auth_type === AuthType.USERNAME_PASSWORD) {
+      if (sftpCon.auth_type === AuthType.USERNAME_PASSWORD && sftpCon.password) {
         await sftp.connect({
           host: sftpCon.host,
           port: sftpCon.port,
           username: sftpCon.user_name,
           password: decrypt(sftpCon.password),
         });
-      } else {
+      } else if (sftpCon.private_key) {
         await sftp.connect({
           host: sftpCon.host,
           port: sftpCon.port,
@@ -82,8 +89,10 @@ export class ExecutorService {
         });
       }
       return sftp;
-    } catch (err) {
-      throw new Error(`SFTP connection failed: ${err.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.loggerService.error(message);
+      throw new Error(`SFTP connection failed: ${message}`);
     }
   }
 
@@ -103,9 +112,10 @@ export class ExecutorService {
       const records = await this.transformFileToJSON(sftp, file);
       await this.db.updateTable(`${job.tenant_id}_${job.table_name}`, job.mode, records);
 
-      await this.redis.set(jobKey, 0, CACHE_TTL);
-    } catch (error) {
-      this.loggerService.error(`SFTP error: ${error.message}`);
+      await this.redis.set(jobKey, 0, this.cacheTtl);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.loggerService.error(`SFTP error: ${message}`);
       await this.handleFailure(job, jobKey);
     } finally {
       sftp.end();
@@ -115,16 +125,16 @@ export class ExecutorService {
   @ApmSpan('transform-file-json')
   async transformFileToJSON(sftp: SFTPClient, file: FileSettings): Promise<Record<string, unknown>[]> {
     try {
-      const buffer = await sftp.get(file.path);
+      const fileData = await sftp.get(file.path);
 
-      let decoded = '';
-      try {
-        decoded = iconv.decode(buffer, 'utf8');
-        if (!isValidText(decoded)) {
-          throw new Error('Invalid text after decoding');
-        }
-      } catch (decodeError) {
-        this.loggerService.warn(`Decoding failed : ${decodeError}`);
+      if (!(Buffer.isBuffer(fileData) || fileData instanceof Uint8Array)) {
+        throw new Error('SFTP returned non-buffer data (stream or string)');
+      }
+
+      const decoded = iconv.decode(fileData, 'utf8');
+
+      if (!isValidText(decoded)) {
+        throw new Error('Invalid text after decoding');
       }
 
       if (file.file_type === FileType.JSON) {
@@ -173,7 +183,7 @@ export class ExecutorService {
       this.schedulerRegistry.deleteCronJob(jobKey);
     }
 
-    await this.redis.set(jobKey, 0, CACHE_TTL);
+    await this.redis.set(jobKey, 0, this.cacheTtl);
 
     const cronJob = new CronJob(
       job.cron,

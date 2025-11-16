@@ -2,36 +2,32 @@
   "compilerOptions": {
     "declaration": true,
     "emitDeclarationOnly": false,
+    "importHelpers": true,
     "target": "ES2022",
-    "module": "CommonJS",
+    "module": "NodeNext",
     "lib": [
       "ES2022"
     ],
     "allowJs": true,
-    "outDir": "dist",
+    "moduleResolution": "NodeNext",
     "sourceMap": true,
-    "noImplicitAny": false,
-    "strictBindCallApply": false,
-    "noFallthroughCasesInSwitch": false,
-    "esModuleInterop": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
     "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "noImplicitAny": true,
     "skipLibCheck": true,
-    "moduleResolution": "node",
     "forceConsistentCasingInFileNames": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "useDefineForClassFields": false
   },
   "include": [
-    "src/**/*",
-    "knex/knex.module.ts",
-    "knex/knexfile.ts",
-    "knex/migrations/**/*.ts"
+    "src/**/*"
   ],
   "exclude": [
     "node_modules",
-    "dist",
-    "__tests__",
-    "test"
+    "dist"
   ]
 }

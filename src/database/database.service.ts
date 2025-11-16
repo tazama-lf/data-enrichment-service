@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { LoggerService } from '@tazama-lf/frms-coe-lib';
-import { Pool, QueryResult } from 'pg';
+import { Pool, QueryResult, QueryResultRow } from 'pg';
 import { v4 } from 'uuid';
 import { Enrichment } from '@tazama-lf/tcs-lib';
 import { IngestMode } from '@tazama-lf/tcs-lib';
@@ -15,7 +15,7 @@ export class DatabaseService {
     });
   }
 
-  async query<T = unknown>(sql: string, params?: unknown[]): Promise<QueryResult<T>> {
+  async query<T extends QueryResultRow = QueryResultRow>(sql: string, params?: unknown[]): Promise<QueryResult<T>> {
     const result = await this.pool.query(sql, params);
     return result;
   }
@@ -110,7 +110,7 @@ export class DatabaseService {
 
   async updateTable(table_name: string, mode: IngestMode, data: unknown): Promise<void> {
     await this.ensureTable(table_name);
-    const arr = Array.isArray(data) ? data : Object.values(data).flat();
+    const arr = Array.isArray(data) ? data : Object.values(data as Record<string, unknown>).flat();
 
     const rows = arr.map((item) => ({
       id: v4(),

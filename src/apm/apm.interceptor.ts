@@ -11,7 +11,7 @@ import type { Request, Response } from 'express';
 export class ApmInterceptor implements NestInterceptor {
   constructor(private readonly apmService: ApmService) {}
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest<Request>();
     const response = context.switchToHttp().getResponse<Response>();
 

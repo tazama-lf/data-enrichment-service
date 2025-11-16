@@ -1,13 +1,13 @@
-import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
 import { Enrichment, ISuccess, JobStatus, ScheduleStatus } from '@tazama-lf/tcs-lib';
 import { createHash } from 'crypto';
 import { Request } from 'express';
 import { v4 } from 'uuid';
+import { ApmSpan } from '../apm/apm.decorators';
 import { DatabaseService } from '../database/database.service';
 import { CreateEnrichDataDto } from './dto/create-enrich-data.dto';
-import { ApmSpan } from '../apm/apm.decorators';
 
 @Injectable()
 export class JobService {
@@ -22,8 +22,14 @@ export class JobService {
     this.cacheTtl = this.configService.get<number>('CACHE_TTL', 86400);
   }
 
+  private handleError(err: unknown): never {
+    const message = err instanceof Error ? err.message : String(err);
+    this.loggerService.error(message);
+    throw new BadRequestException(message);
+  }
+
   @ApmSpan('data-enrichment-push')
-  async createEnrich(req: Request, body: CreateEnrichDataDto, tenantId: string): Promise<ISuccess> {
+  async createEnrich({ req, body, tenantId }: { req: Request; body: CreateEnrichDataDto; tenantId: string }): Promise<ISuccess> {
     try {
       const contentType = req.headers['content-type'];
       if (!contentType?.includes('application/json')) {
@@ -82,13 +88,7 @@ export class JobService {
         success: true,
       };
     } catch (error) {
-      this.loggerService.error(`Error in createEnrich: ${error.message}`, error.stack);
-
-      if (error instanceof BadRequestException || error instanceof NotFoundException) {
-        throw error;
-      }
-
-      throw new InternalServerErrorException('An unexpected error occurred while enriching data.');
+      this.handleError(error);
     }
   }
 }

@@ -1,15 +1,24 @@
+import { ConfigService } from '@nestjs/config';
 import { RedisConfig } from '@tazama-lf/frms-coe-lib/lib/interfaces';
 
-const redisConfig: RedisConfig = {
-  db: 0,
-  servers: [
-    {
-      host: process.env.REDIS_HOST,
-      port: parseInt(process.env.REDIS_PORT, 10),
-    },
-  ],
-  password: process.env.REDIS_PASSWORD || '',
-  isCluster: false,
-};
+export const createRedisConfig = (configService: ConfigService): RedisConfig => {
+  const host = configService.get<string>('REDIS_HOST');
+  const port = configService.get<number>('REDIS_PORT');
+  const password = configService.get<string>('REDIS_PASSWORD');
 
-export default redisConfig;
+  if (!host || !port || !password) {
+    throw new Error('Redis configuration is incomplete. Check REDIS_HOST, REDIS_PORT, and REDIS_PASSWORD environment variables.');
+  }
+
+  return {
+    db: configService.get<number>('REDIS_DB', 0),
+    servers: [
+      {
+        host,
+        port,
+      },
+    ],
+    password,
+    isCluster: false,
+  };
+};

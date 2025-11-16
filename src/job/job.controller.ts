@@ -15,6 +15,6 @@ export class JobController {
   @Post('/*')
   @RequireEditorRole()
   async getEnrich(@Req() req: Request, @Body() body: CreateEnrichDataDto, @User() user: AuthenticatedUser) {
-    return await this.jobService.createEnrich(req, body, user.token.tenantId);
+    return await this.jobService.createEnrich({ req, body, tenantId: user.token.tenantId });
   }
 }

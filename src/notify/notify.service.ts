@@ -1,7 +1,7 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
-import { StartupFactory } from '@tazama-lf/frms-coe-startup-lib';
+import { onMessageFunction, StartupFactory } from '@tazama-lf/frms-coe-startup-lib';
 import { ConfigType, Job, PushJob } from '@tazama-lf/tcs-lib';
 import { DatabaseService } from '../database/database.service';
 import { ExecutorService } from '../executor/executor.service';
@@ -27,6 +27,8 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
     private readonly configService: ConfigService,
   ) {
     this.cacheTtl = this.configService.get<number>('CACHE_TTL', 86400);
+    this.consumerStream = this.configService.get<string>('CONSUMER_STREAM', 'config.notification');
+    this.producerStream = this.configService.get<string>('PRODUCER_STREAM', 'config.notification.response');
   }
 
   async onModuleInit(): Promise<void> {
@@ -35,10 +37,13 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    this.consumerStream = this.configService.get<string>('CONSUMER_STREAM', 'config.notification');
-    this.producerStream = this.configService.get<string>('PRODUCER_STREAM', 'config.notification.response');
     try {
-      await this.natsService.init(this.handleNatsMessage.bind(this), this.logger, [this.consumerStream], this.producerStream);
+      await this.natsService.init(
+        this.handleNatsMessage.bind(this) as onMessageFunction,
+        this.logger,
+        [this.consumerStream],
+        this.producerStream,
+      );
       this.isInitialized = true;
       this.logger.log('NATS consumer initialized for config.notification');
 
@@ -73,16 +78,15 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
     const { dataPayload } = reqObj as { dataPayload: string };
     this.logger.log(`RECEIVING MESSAGE ${dataPayload}`);
 
+    const payload = JSON.parse(dataPayload) as {
+      endpointId: string;
+      configType: ConfigType;
+    };
+
+    const { endpointId, configType } = payload;
     try {
-      const payload = JSON.parse(dataPayload) as {
-        endpoint_id: string;
-        config_type: ConfigType;
-      };
-
-      const { endpoint_id, config_type } = payload;
-
       const query =
-        config_type === ConfigType.PUSH
+        configType === ConfigType.PUSH
           ? `
           SELECT *
           FROM endpoints
@@ -109,33 +113,31 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
           LIMIT 1;
         `;
 
-      const result = await this.db.query(query, [endpoint_id]);
-      const record = result.rows[0] as PushJob | Job;
+      const result = await this.db.query(query, [endpointId]);
+      const record = result.rows[0] as PushJob | Job | undefined;
 
       if (!record) {
-        this.logger.warn(`No configuration found for ID: ${endpoint_id}`);
-      } else if (config_type === ConfigType.PUSH) {
-        await this.redis.setJson(record.path, JSON.stringify(record), this.cacheTtl);
+        this.logger.warn(`No configuration found for ID: ${endpointId}`);
+      } else if (configType === ConfigType.PUSH) {
+        await this.redis.setJson(record.path as string, JSON.stringify(record), this.cacheTtl);
         this.logger.log(`Updated cache for key: ${record.path}`);
       } else {
         await this.executorService.addCronJob(record as Job);
       }
 
       await handleResponse({
-        endpoint_id,
+        endpointId,
         status: Status.ACK,
         timestamp: new Date().toISOString(),
       });
 
-      this.logger.log(`Transaction successfully done: ${endpoint_id}`);
+      this.logger.log(`Transaction successfully done: ${endpointId}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.error(`Error processing message: ${message}`);
 
-      const payload = (reqObj as any)?.dataPayload ? JSON.parse((reqObj as any).dataPayload) : { endpoint_id: 'unknown' };
-
       await handleResponse({
-        endpoint_id: payload.endpoint_id,
+        endpointId: endpointId,
         status: Status.NACK,
         error: message,
         timestamp: new Date().toISOString(),

@@ -21,28 +21,36 @@ import type { Span } from 'elastic-apm-node';
  * }
  * ```
  */
-export function ApmSpan(spanName: string) {
-  return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+export function ApmSpan(spanName: string): MethodDecorator {
+  return function <T>(
+    target: object,
+    propertyKey: string | symbol,
+    descriptor: TypedPropertyDescriptor<T>,
+  ): TypedPropertyDescriptor<T> | void {
     const originalMethod = descriptor.value;
 
-    descriptor.value = async function (...args: any[]) {
+    if (typeof originalMethod !== 'function') {
+      return descriptor;
+    }
+
+    descriptor.value = async function (this: unknown, ...args: unknown[]) {
       // Try to get ApmService from the current instance
       let apmService: ApmService | undefined;
 
       // Check if the class has apmService as a property
       if (this && typeof this === 'object' && 'apmService' in this) {
-        apmService = this.apmService;
+        apmService = (this as Record<string, unknown>).apmService as ApmService;
       }
 
       if (!apmService) {
         // Fallback: execute without APM instrumentation
-        return originalMethod.apply(this, args);
+        return (originalMethod as (...args: unknown[]) => unknown).apply(this, args);
       }
 
       const span: Span | null = apmService.startSpan(spanName);
 
       try {
-        const result = await originalMethod.apply(this, args);
+        const result = await (originalMethod as (...args: unknown[]) => Promise<unknown>).apply(this, args);
 
         if (span) {
           span.setOutcome('success');
@@ -57,7 +65,7 @@ export function ApmSpan(spanName: string) {
         }
         throw error;
       }
-    };
+    } as T;
 
     return descriptor;
   };
