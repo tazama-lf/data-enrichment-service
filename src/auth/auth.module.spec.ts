@@ -1,7 +1,7 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth.module';
-import { TazamaAuthGuard } from './tazam-auth.guard';
+import { TazamaAuthGuard } from './tazama-auth.guard';
 
 describe('AuthModule', () => {
   let module: TestingModule;
@@ -65,9 +65,7 @@ describe('AuthModule', () => {
         providers: [
           {
             provide: 'TestService',
-            useFactory: (authGuard: TazamaAuthGuard) => {
-              return { authGuard };
-            },
+            useFactory: (authGuard: TazamaAuthGuard) => ({ authGuard }),
             inject: [TazamaAuthGuard],
           },
         ],

@@ -22,11 +22,7 @@ import type { Span } from 'elastic-apm-node';
  * ```
  */
 export function ApmSpan(spanName: string): MethodDecorator {
-  return function <T>(
-    target: object,
-    propertyKey: string | symbol,
-    descriptor: TypedPropertyDescriptor<T>,
-  ): TypedPropertyDescriptor<T> | void {
+  return function <T>(target: object, propertyKey: string | symbol, descriptor: TypedPropertyDescriptor<T>): TypedPropertyDescriptor<T> {
     const originalMethod = descriptor.value;
 
     if (typeof originalMethod !== 'function') {

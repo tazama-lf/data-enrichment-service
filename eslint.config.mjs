@@ -1,62 +1,62 @@
-import eslint from '@eslint/js';
-import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
-import globals from 'globals';
-import tseslint from 'typescript-eslint';
-export default tseslint.config(
+// SPDX-License-Identifier: Apache-2.0
+import eslintPluginEslintComments from '@eslint-community/eslint-plugin-eslint-comments';
+import stylistic from '@stylistic/eslint-plugin';
+import tsEslint from '@typescript-eslint/eslint-plugin';
+import tsParser from '@typescript-eslint/parser';
+import eslintStandard from 'eslint-config-love';
+import eslintConfigPrettier from 'eslint-config-prettier/flat';
+import { defineConfig, globalIgnores } from 'eslint/config';
+
+export default defineConfig([
+  eslintConfigPrettier,
+  globalIgnores(['**/coverage/**', '**/build/**', '**/node_modules/**', '**/__tests__/**', '**/dist/**', '**/test/**', '*.ts', '**/*.spec.ts',]),
   {
-    ignores: [
-      'eslint.config.ts',
-      'dist/**/*',
-      'node_modules/**/*',
-      'coverage/**/*',
-      'build/**/*',
-      'prisma/client/**/*',
-      'generated/**/*',
-      '**/*.d.ts',
-      '*.config.js',
-      '*.config.mjs',
-    ],
-  },
-  eslint.configs.recommended,
-  ...tseslint.configs.recommendedTypeChecked,
-  eslintPluginPrettierRecommended,
-  {
+    files: ['**/*.ts'],
+    plugins: {
+      ...eslintStandard.plugins,
+      ['@eslint-community/eslint-comments']: eslintPluginEslintComments,
+      ['@stylistic']: stylistic,
+      ['@typescript-eslint']: tsEslint,
+    },
     languageOptions: {
-      globals: {
-        ...globals.node,
-        ...globals.jest,
-      },
-      sourceType: 'module', // Changed to 'module' for NestJS ES modules compatibility
+      ...eslintStandard.languageOptions,
+      parser: tsParser,
+      ecmaVersion: 2022,
+      sourceType: 'module',
       parserOptions: {
-        projectService: true,
-        tsconfigRootDir: import.meta.dirname,
+        project: ['./tsconfig.json'],
       },
     },
-  },
-  {
     rules: {
-      '@typescript-eslint/no-explicit-any': 'off', // Allow 'any' for flexibility in NestJS/Prisma
-      '@typescript-eslint/no-floating-promises': 'warn',
-      '@typescript-eslint/no-unsafe-argument': 'warn',
-      '@typescript-eslint/no-unsafe-assignment': 'warn',
-      '@typescript-eslint/no-unsafe-member-access': 'warn',
-      '@typescript-eslint/no-unsafe-call': 'warn',
-      '@typescript-eslint/no-unsafe-return': 'warn',
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
-      '@typescript-eslint/require-await': 'warn',
-      '@typescript-eslint/unbound-method': 'warn',
-      '@typescript-eslint/no-require-imports': 'warn',
-      // From reference: stylistic rules for consistency
+      ...eslintStandard.rules,
+      ...eslintPluginEslintComments.configs.recommended.rules,
+      '@eslint-community/eslint-comments/require-description': ['error', { ignore: ['eslint-enable'] }],
+      '@eslint-community/eslint-comments/disable-enable-pair': 'error',
+      '@typescript-eslint/init-declarations': 'off',
+      '@typescript-eslint/max-params': ['warn', { max: 6 }],
+      '@typescript-eslint/no-non-null-assertion': 'off',
+      '@typescript-eslint/class-methods-use-this': 'off',
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-floating-promises': 'off',
+      '@typescript-eslint/no-magic-numbers': 'off',
+      '@typescript-eslint/no-var-requires': 'off',
+      '@typescript-eslint/no-unsafe-type-assertion': 'off',
+      '@typescript-eslint/no-use-before-define': 'off',
+      '@typescript-eslint/prefer-destructuring': 'warn',
       '@typescript-eslint/prefer-optional-chain': 'warn',
-      '@typescript-eslint/no-unnecessary-condition': 'warn',
-      // From reference: enforce single quotes (common in NestJS)
-      'quotes': ['error', 'single'],
-      // From reference: complexity limits
-      'complexity': ['warn', { max: 25 }],
-      'max-depth': ['warn', { max: 5 }],
-      'no-console': 'warn', // Changed to warn for NestJS logging
-      // Disabled quotes rule to allow both single and double quotes
-      'quotes': 'off',
+      '@typescript-eslint/restrict-template-expressions': 'error',
+      '@typescript-eslint/strict-boolean-expressions': 'off',
+      '@stylistic/quotes': ['error', 'single'],
+      complexity: ['warn', { max: 15 }],
+      'no-console': 'error',
+      'no-unneeded-ternary': 'off',
+      /* eslint-comments are bundled with eslint-config-love but they are using the unmaintained plugin. Replaced with @eslint-community/eslint-plugin-eslint-comments */
+      'eslint-comments/require-description': 'off',
+      'eslint-comments/disable-enable-pair': 'off',
+      'eslint-comments/no-aggregating-enable': 'off',
+      'eslint-comments/no-duplicate-disable': 'off',
+      'eslint-comments/no-unlimited-disable': 'off',
+      'eslint-comments/no-unused-enable': 'off',
     },
   },
-);
+]);

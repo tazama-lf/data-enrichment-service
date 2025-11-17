@@ -96,7 +96,7 @@ export class EnvironmentVariables {
   LOGSTASH_LEVEL?: string;
 }
 
-export const validate = (config: Record<string, unknown>) => {
+export const validate = (config: Record<string, unknown>): EnvironmentVariables => {
   const validatedConfig = plainToClass(EnvironmentVariables, config, {
     enableImplicitConversion: true,
   });

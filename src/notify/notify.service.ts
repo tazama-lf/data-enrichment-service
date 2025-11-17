@@ -16,8 +16,8 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
   private readonly natsService: StartupFactory = new StartupFactory();
   private isInitialized = false;
   private readonly cacheTtl: number;
-  private consumerStream: string;
-  private producerStream: string;
+  private readonly consumerStream: string;
+  private readonly producerStream: string;
 
   constructor(
     private readonly logger: LoggerService,
@@ -49,7 +49,7 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
 
       const query = `
   SELECT *
-  FROM endpoints
+  FROM push_jobs
   WHERE 
      status IN ('STATUS_08_DEPLOYED', 'STATUS_06_EXPORTED')
     AND publishing_status = 'active';
@@ -89,7 +89,7 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
         configType === ConfigType.PUSH
           ? `
           SELECT *
-          FROM endpoints
+          FROM push_jobs
           WHERE id = $1
           LIMIT 1;
         `
@@ -99,8 +99,8 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
               s.cron,
               s.start_date,
               s.end_date
-          FROM job j
-          LEFT JOIN schedule s ON j.schedule_id = s.id
+          FROM pull_jobs j
+          LEFT JOIN cron_jobs s ON j.schedule_id = s.id
           WHERE 
               j.id = $1
               AND j.status = 'STATUS_08_DEPLOYED'
@@ -119,7 +119,7 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
       if (!record) {
         this.logger.warn(`No configuration found for ID: ${endpointId}`);
       } else if (configType === ConfigType.PUSH) {
-        await this.redis.setJson(record.path as string, JSON.stringify(record), this.cacheTtl);
+        await this.redis.setJson(record.path!, JSON.stringify(record), this.cacheTtl);
         this.logger.log(`Updated cache for key: ${record.path}`);
       } else {
         await this.executorService.addCronJob(record as Job);
@@ -137,7 +137,7 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
       this.logger.error(`Error processing message: ${message}`);
 
       await handleResponse({
-        endpointId: endpointId,
+        endpointId,
         status: Status.NACK,
         error: message,
         timestamp: new Date().toISOString(),

@@ -1,8 +1,8 @@
 import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
-import { Enrichment, ISuccess, JobStatus, ScheduleStatus } from '@tazama-lf/tcs-lib';
-import { createHash } from 'crypto';
+import { Enrichment, ISuccess, JobStatus, PushJob, ScheduleStatus } from '@tazama-lf/tcs-lib';
+import { createHash } from 'node:crypto';
 import { Request } from 'express';
 import { v4 } from 'uuid';
 import { ApmSpan } from '../apm/apm.decorators';
@@ -30,46 +30,46 @@ export class JobService {
         throw new BadRequestException('Content-Type must be application/json');
       }
 
-      const path = req.path;
+      const { path } = req;
 
       const cachedEndpoint = await this.redis.getJson(path);
-      let endpoint;
+      let endpoint: PushJob;
 
       if (cachedEndpoint) {
-        endpoint = JSON.parse(cachedEndpoint);
+        endpoint = JSON.parse(cachedEndpoint) as PushJob;
 
-        if (endpoint && endpoint.tenant_id !== tenantId) {
+        if (endpoint.tenant_id !== tenantId) {
           throw new NotFoundException(`Endpoint ${path} does not exist with tenant_id ${tenantId}`);
         }
         this.loggerService.log(`Using endpoint from cache: ${path}`);
       } else {
         const query = `
       SELECT *
-      FROM endpoints
+      FROM push_jobs
       WHERE path = $1 AND tenant_id = $2
       LIMIT 1;
     `;
-        const { rows } = await this.db.query(query, [path, tenantId]);
-        endpoint = rows[0];
+        const { rows } = await this.db.query<PushJob>(query, [path, tenantId]);
 
-        if (!endpoint) {
+        if (!rows.length) {
           throw new NotFoundException(`Endpoint ${path} does not exist with tenant_id ${tenantId}`);
         }
+
+        endpoint = rows[0]!;
 
         await this.redis.setJson(path, JSON.stringify(endpoint), this.cacheTtl);
         this.loggerService.log(`Cached endpoint for path: ${path}`);
       }
 
-      const isNotDeployed = endpoint.status !== JobStatus.DEPLOYED;
-      const isNotActive = endpoint.publishing_status !== ScheduleStatus.ACTIVE;
-      if (isNotDeployed || isNotActive) {
+      if (endpoint.status !== JobStatus.DEPLOYED || endpoint.publishing_status !== ScheduleStatus.ACTIVE) {
         throw new BadRequestException('Endpoint not deployed or not active.');
       }
 
-      const correlation_id = v4();
-      const payload: Enrichment[] = (Array.isArray(body.data) ? body.data : [body.data]).map((item) => ({
+      const correlationId = v4();
+      const items = Array.isArray(body.data) ? body.data : [body.data];
+      const payload: Enrichment[] = items.map((item) => ({
         tenant_id: tenantId,
-        correlation_id,
+        correlation_id: correlationId,
         data: item,
         endpoint_id: endpoint.id,
         checksum: createHash('sha256').update(JSON.stringify(item)).digest('hex'),

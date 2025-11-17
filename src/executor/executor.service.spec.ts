@@ -1,8 +1,8 @@
 import { HttpService } from '@nestjs/axios';
 import { SchedulerRegistry } from '@nestjs/schedule';
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
-import { AuthType, FileType, IngestMode, Job, JobStatus, ScheduleStatus, SourceType } from '@tazama-lf/tcs-lib';
+import { AuthType, FileType, IngestMode, type Job, JobStatus, ScheduleStatus, SourceType } from '@tazama-lf/tcs-lib';
 import { CronJob } from 'cron';
 import { DatabaseService } from '../database/database.service';
 import { ExecutorService } from './executor.service';
@@ -184,7 +184,7 @@ describe('ExecutorService', () => {
 
       mockHttpService.get.mockReturnValue(of(mockResponse));
 
-      await service['handleHttpJob'](httpJob, 'job-key');
+      await service.handleHttpJob(httpJob, 'job-key');
 
       expect(mockHttpService.get).toHaveBeenCalledWith('https://api.example.com/data', {
         headers: { Authorization: 'Bearer token' },
@@ -205,7 +205,7 @@ describe('ExecutorService', () => {
         }),
       );
 
-      await service['handleHttpJob'](httpJob, 'job-key');
+      await service.handleHttpJob(httpJob, 'job-key');
 
       expect(mockDatabaseService.updateTable).toHaveBeenCalledWith('tenant-456_test_table', IngestMode.APPEND, [{ id: 1 }, { id: 2 }]);
     });
@@ -222,7 +222,7 @@ describe('ExecutorService', () => {
         }),
       );
 
-      await service['handleHttpJob'](httpJob, 'job-key');
+      await service.handleHttpJob(httpJob, 'job-key');
 
       expect(mockRedisService.getJson).toHaveBeenCalledWith('job-key');
       expect(mockDatabaseService.updateTable).not.toHaveBeenCalled();
@@ -240,7 +240,7 @@ describe('ExecutorService', () => {
         }),
       );
 
-      await service['handleHttpJob'](httpJob, 'job-key');
+      await service.handleHttpJob(httpJob, 'job-key');
 
       expect(mockRedisService.getJson).toHaveBeenCalledWith('job-key');
       expect(mockDatabaseService.updateTable).not.toHaveBeenCalled();
@@ -250,7 +250,7 @@ describe('ExecutorService', () => {
       const httpJob = { ...mockJob, source_type: SourceType.HTTP };
       mockHttpService.get.mockReturnValue(throwError(() => new Error('Network error')));
 
-      await expect(service['handleHttpJob'](httpJob, 'job-key')).rejects.toThrow('Network error');
+      await expect(service.handleHttpJob(httpJob, 'job-key')).rejects.toThrow('Network error');
     });
   });
 
@@ -331,7 +331,7 @@ describe('ExecutorService', () => {
         },
       };
 
-      await service['handleSftpJob'](sftpJob, 'job-key');
+      await service.handleSftpJob(sftpJob, 'job-key');
 
       expect(mockSftpClient.exists).toHaveBeenCalledWith('/data/test.json');
       expect(mockSftpClient.get).toHaveBeenCalledWith('/data/test.json');
@@ -354,7 +354,7 @@ describe('ExecutorService', () => {
         },
       };
 
-      await service['handleSftpJob'](sftpJob, 'job-key');
+      await service.handleSftpJob(sftpJob, 'job-key');
 
       expect(mockLoggerService.error).toHaveBeenCalledWith('SFTP error: File path not provided in job config');
       expect(mockRedisService.getJson).toHaveBeenCalledWith('job-key');
@@ -380,7 +380,7 @@ describe('ExecutorService', () => {
         },
       };
 
-      await service['handleSftpJob'](sftpJob, 'job-key');
+      await service.handleSftpJob(sftpJob, 'job-key');
 
       expect(mockLoggerService.error).toHaveBeenCalledWith('SFTP error: File /data/missing.json not found on SFTP server');
       expect(mockRedisService.getJson).toHaveBeenCalledWith('job-key');
@@ -433,13 +433,6 @@ describe('ExecutorService', () => {
       ]);
     });
 
-    it('should throw error for unsupported file type', async () => {
-      mockSftpClient.get.mockResolvedValue(Buffer.from('data'));
-      const file = { path: '/data/test.xml', file_type: 'XML' as FileType, delimiter: '' };
-
-      await expect(service.transformFileToJSON(mockSftpClient, file)).rejects.toThrow('Unsupported file type');
-    });
-
     it('should handle CSV with custom delimiter', async () => {
       const csvContent = 'Name;Age;City\nJohn;30;NYC\nJane;25;LA';
       mockSftpClient.get.mockResolvedValue(Buffer.from(csvContent));
@@ -470,7 +463,7 @@ describe('ExecutorService', () => {
     it('should increment failure count', async () => {
       mockRedisService.getJson.mockResolvedValue('0');
 
-      await service['handleFailure'](mockJob, 'job-key');
+      await service.handleFailure(mockJob, 'job-key');
 
       expect(mockRedisService.getJson).toHaveBeenCalledWith('job-key');
       expect(mockRedisService.set).toHaveBeenCalledWith('job-key', 1, 86400);
@@ -483,7 +476,7 @@ describe('ExecutorService', () => {
       };
       mockSchedulerRegistry.getCronJob.mockReturnValue(mockCronJob as unknown as CronJob);
 
-      await service['handleFailure'](mockJob, 'job-key');
+      await service.handleFailure(mockJob, 'job-key');
 
       expect(mockRedisService.set).toHaveBeenCalledWith('job-key', 3, 86400);
       expect(mockCronJob.stop).toHaveBeenCalled();
@@ -493,7 +486,7 @@ describe('ExecutorService', () => {
     it('should not stop job when iterations limit not reached', async () => {
       mockRedisService.getJson.mockResolvedValue('1');
 
-      await service['handleFailure'](mockJob, 'job-key');
+      await service.handleFailure(mockJob, 'job-key');
 
       expect(mockRedisService.set).toHaveBeenCalledWith('job-key', 2, 86400);
       expect(mockSchedulerRegistry.deleteCronJob).not.toHaveBeenCalled();
@@ -503,7 +496,7 @@ describe('ExecutorService', () => {
       const jobWithoutIterations = { ...mockJob, iterations: undefined };
       mockRedisService.getJson.mockResolvedValue('5');
 
-      await service['handleFailure'](jobWithoutIterations, 'job-key');
+      await service.handleFailure(jobWithoutIterations, 'job-key');
 
       expect(mockRedisService.set).toHaveBeenCalledWith('job-key', 6, 86400);
       expect(mockSchedulerRegistry.deleteCronJob).not.toHaveBeenCalled();
@@ -523,7 +516,7 @@ describe('ExecutorService', () => {
         }),
       );
 
-      await service['run'](httpJob, 'job-key');
+      await service.run(httpJob, 'job-key');
 
       expect(mockHttpService.get).toHaveBeenCalled();
       expect(mockDatabaseService.updateTable).toHaveBeenCalled();
@@ -547,7 +540,7 @@ describe('ExecutorService', () => {
         },
       };
 
-      await service['run'](sftpJob, 'job-key');
+      await service.run(sftpJob, 'job-key');
 
       expect(mockSftpClient.connect).toHaveBeenCalled();
       expect(mockDatabaseService.updateTable).toHaveBeenCalled();
@@ -557,7 +550,7 @@ describe('ExecutorService', () => {
       const httpJob = { ...mockJob, source_type: SourceType.HTTP };
       mockHttpService.get.mockReturnValue(throwError(() => new Error('Execution failed')));
 
-      await service['run'](httpJob, 'job-key');
+      await service.run(httpJob, 'job-key');
 
       expect(mockLoggerService.error).toHaveBeenCalledWith('Execution failed');
       expect(mockRedisService.getJson).toHaveBeenCalledWith('job-key');

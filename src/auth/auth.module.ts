@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { TazamaAuthGuard } from './tazam-auth.guard';
+import { TazamaAuthGuard } from './tazama-auth.guard';
 
 @Module({
   imports: [ConfigModule],

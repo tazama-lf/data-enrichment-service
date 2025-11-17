@@ -16,17 +16,17 @@ export class ApmInterceptor implements NestInterceptor {
     const response = context.switchToHttp().getResponse<Response>();
 
     // Create transaction name based on HTTP method and route
-    const routePath = request.route?.path || request.url;
-    const transactionName = `${request.method} ${routePath}`;
+    const transactionName = `${request.method} ${request.url}`;
 
     const transaction: Transaction | null = this.apmService.startTransaction(transactionName);
 
     // Add labels for better filtering and analysis
+    const userAgent: string = request.get('user-agent') ?? 'unknown';
     if (transaction) {
       transaction.addLabels({
         'http.method': request.method,
         'http.url': request.url,
-        'user.agent': request.get('user-agent') || 'unknown',
+        'user.agent': userAgent,
       });
     }
 

@@ -1,5 +1,5 @@
-import { ConfigService } from '@nestjs/config';
-import { RedisConfig } from '@tazama-lf/frms-coe-lib/lib/interfaces';
+import type { ConfigService } from '@nestjs/config';
+import type { RedisConfig } from '@tazama-lf/frms-coe-lib/lib/interfaces';
 
 export const createRedisConfig = (configService: ConfigService): RedisConfig => {
   const host = configService.get<string>('REDIS_HOST');

@@ -1,8 +1,9 @@
 import { Injectable, CanActivate, ExecutionContext, UnauthorizedException, Logger } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ClaimValidationResult, TazamaToken, validateTokenAndClaims } from '@tazama-lf/auth-lib';
+import * as jwt from 'jsonwebtoken';
 import { CLAIMS_KEY } from './auth.decorator';
-import { AuthenticatedUser } from './auth.types';
+import { AuthenticatedUser, RequestWithUser } from './auth.types';
 
 @Injectable()
 export class TazamaAuthGuard implements CanActivate {
@@ -10,14 +11,14 @@ export class TazamaAuthGuard implements CanActivate {
 
   private readonly LOG_CONTEXT = `${TazamaAuthGuard.name}.canActivate`;
 
-  constructor(private reflector: Reflector) {}
+  constructor(private readonly reflector: Reflector) {}
 
-  async canActivate(context: ExecutionContext): Promise<boolean> {
+  canActivate(context: ExecutionContext): boolean {
     // Get required claims from decorator
     const requiredClaims = this.reflector.getAllAndOverride<string[]>(CLAIMS_KEY, [context.getHandler(), context.getClass()]);
 
-    const request = context.switchToHttp().getRequest();
-    const authHeader = request.headers.authorization;
+    const request: RequestWithUser = context.switchToHttp().getRequest<RequestWithUser>();
+    const authHeader: string | undefined = request.headers.authorization;
 
     // Validate authorization header
     if (!authHeader?.startsWith('Bearer ')) {
@@ -26,7 +27,7 @@ export class TazamaAuthGuard implements CanActivate {
     }
 
     // Check if we have either type of claims requirement
-    if (!requiredClaims || requiredClaims.length === 0) {
+    if (requiredClaims.length === 0) {
       this.logger.warn('No required claims specified for protected route', this.LOG_CONTEXT);
       throw new UnauthorizedException('No required claims specified');
     }
@@ -38,7 +39,7 @@ export class TazamaAuthGuard implements CanActivate {
         throw new UnauthorizedException('Malformed authorization header');
       }
 
-      const token = tokenParts[1];
+      const [, token] = tokenParts;
       // Determine which claims to validate
       const claimsToValidate = requiredClaims;
 
@@ -49,7 +50,7 @@ export class TazamaAuthGuard implements CanActivate {
       let validClaims: string[] = [];
       let invalidClaims: string[] = [];
 
-      if (requiredClaims && requiredClaims.length > 0) {
+      if (requiredClaims.length > 0) {
         // ALL required claims must be present
         const hasAllClaims = requiredClaims.every((claim) => validated[claim]);
         validClaims = requiredClaims.filter((claim) => validated[claim]);
@@ -101,8 +102,7 @@ export class TazamaAuthGuard implements CanActivate {
 
   private extractTokenPayload(token: string): TazamaToken {
     try {
-      const jwt = require('jsonwebtoken');
-      const decoded = jwt.decode(token) as TazamaToken;
+      const decoded = jwt.decode(token) as TazamaToken | null;
       if (!decoded) {
         throw new Error('Failed to decode token');
       }
@@ -113,7 +113,7 @@ export class TazamaAuthGuard implements CanActivate {
       if (!decoded.tenantId) {
         throw new Error('Token missing tenantId');
       }
-      if (!decoded.claims || !Array.isArray(decoded.claims)) {
+      if (!Array.isArray(decoded.claims)) {
         throw new Error('Token missing or invalid claims array');
       }
       return decoded;

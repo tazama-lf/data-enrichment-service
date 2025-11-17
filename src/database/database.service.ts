@@ -2,12 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { LoggerService } from '@tazama-lf/frms-coe-lib';
 import { Pool, QueryResult, QueryResultRow } from 'pg';
 import { v4 } from 'uuid';
-import { Enrichment } from '@tazama-lf/tcs-lib';
-import { IngestMode } from '@tazama-lf/tcs-lib';
+import { Enrichment, IngestMode } from '@tazama-lf/tcs-lib';
 
 @Injectable()
 export class DatabaseService {
-  private pool: Pool;
+  private readonly pool: Pool;
   constructor(private readonly loggerService: LoggerService) {
     this.pool = new Pool({
       connectionString: process.env.CONFIGURATION_DATABASE_URL,
@@ -20,9 +19,9 @@ export class DatabaseService {
     return result;
   }
 
-  async insertRows(tableName: string, rows: Record<string, unknown>[]): Promise<void> {
+  async insertRows(tableName: string, rows: Array<Record<string, unknown>>): Promise<void> {
     try {
-      if (!rows || rows.length === 0) {
+      if (rows.length === 0) {
         throw new Error('No data provided for insertion.');
       }
 
@@ -60,7 +59,7 @@ export class DatabaseService {
     `;
 
     const result = await this.pool.query(checkQuery, [cleanName]);
-    return result.rows[0]?.exists || false;
+    return !!result.rows[0] || false;
   }
 
   async ensureTable(tableName: string): Promise<void> {
@@ -108,8 +107,8 @@ export class DatabaseService {
     }
   }
 
-  async updateTable(table_name: string, mode: IngestMode, data: unknown): Promise<void> {
-    await this.ensureTable(table_name);
+  async updateTable(tableName: string, mode: IngestMode, data: unknown): Promise<void> {
+    await this.ensureTable(tableName);
     const arr = Array.isArray(data) ? data : Object.values(data as Record<string, unknown>).flat();
 
     const rows = arr.map((item) => ({
@@ -118,31 +117,31 @@ export class DatabaseService {
     }));
 
     if (mode === IngestMode.APPEND) {
-      await this.insertRows(table_name, rows);
+      await this.insertRows(tableName, rows);
     } else {
-      const deleteQuery = `DELETE FROM ${table_name};`;
+      const deleteQuery = `DELETE FROM ${tableName};`;
       await this.query(deleteQuery);
-      await this.insertRows(table_name, rows);
+      await this.insertRows(tableName, rows);
     }
   }
 
-  async updateTableWithMetaData(table_name: string, mode: IngestMode, data: Enrichment[]): Promise<void> {
-    await this.ensureTableWithMetaData(table_name);
+  async updateTableWithMetaData(tableName: string, mode: IngestMode, data: Enrichment[]): Promise<void> {
+    await this.ensureTableWithMetaData(tableName);
 
     const rows = data.map((item) => ({
       id: v4(),
-      tenant_id: item?.tenant_id,
-      correlation_id: item?.correlation_id,
+      tenant_id: item.tenant_id,
+      correlation_id: item.correlation_id,
       data: JSON.stringify(item.data),
-      endpoint_id: item?.endpoint_id,
-      checksum: item?.checksum,
+      endpoint_id: item.endpoint_id,
+      checksum: item.checksum,
     }));
     if (mode === IngestMode.APPEND) {
-      await this.insertRows(table_name, rows);
+      await this.insertRows(tableName, rows);
     } else {
-      const deleteQuery = `DELETE FROM ${table_name};`;
+      const deleteQuery = `DELETE FROM ${tableName};`;
       await this.query(deleteQuery);
-      await this.insertRows(table_name, rows);
+      await this.insertRows(tableName, rows);
     }
   }
 }

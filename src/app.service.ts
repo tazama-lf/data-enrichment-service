@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class AppService {
-  getHello(): { status: string } {
+  handleHealthCheck(): { status: string } {
     return { status: 'UP' };
   }
 }

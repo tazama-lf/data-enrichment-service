@@ -28,10 +28,11 @@ export class ExecutorService {
   }
 
   @ApmSpan('data-pull-failure')
-  private async handleFailure(job: Job, jobKey: string): Promise<void> {
+  async handleFailure(job: Job, jobKey: string): Promise<void> {
     const value = await this.redis.getJson(jobKey);
-    const currentFailures = value ?? 0;
-    const newFailures = parseInt(currentFailures) + 1;
+    const parsed = Number(value);
+    const currentFailures = isNaN(parsed) ? 0 : parsed;
+    const newFailures = currentFailures + 1;
     await this.redis.set(jobKey, newFailures, this.cacheTtl);
 
     if (job.iterations && newFailures >= job.iterations) {
@@ -42,7 +43,7 @@ export class ExecutorService {
   }
 
   @ApmSpan('data-pull-run')
-  private async run(job: Job, jobKey: string): Promise<void> {
+  async run(job: Job, jobKey: string): Promise<void> {
     try {
       if (job.source_type === SourceType.HTTP) {
         await this.handleHttpJob(job, jobKey);
@@ -57,9 +58,9 @@ export class ExecutorService {
   }
 
   @ApmSpan('data-pull-http')
-  private async handleHttpJob(job: Job, jobKey: string): Promise<void> {
+  async handleHttpJob(job: Job, jobKey: string): Promise<void> {
     const httpCon = job.connection as HTTPConnection;
-    const { data, status } = await firstValueFrom(this.httpService.get(httpCon.url, { headers: httpCon.headers }));
+    const { data, status } = await firstValueFrom(this.httpService.get<unknown>(httpCon.url, { headers: httpCon.headers }));
 
     if (status === 200 && typeof data === 'object') {
       await this.db.updateTable(`${job.tenant_id}_${job.table_name}`, job.mode, data);
@@ -97,9 +98,9 @@ export class ExecutorService {
   }
 
   @ApmSpan('data-pull-sftp')
-  private async handleSftpJob(job: Job, jobKey: string): Promise<void> {
+  async handleSftpJob(job: Job, jobKey: string): Promise<void> {
     const sftpCon = job.connection as SFTPConnection;
-    const file = job.file;
+    const { file } = job;
     let sftp = new SFTPClient();
 
     try {
@@ -123,7 +124,7 @@ export class ExecutorService {
   }
 
   @ApmSpan('transform-file-json')
-  async transformFileToJSON(sftp: SFTPClient, file: FileSettings): Promise<Record<string, unknown>[]> {
+  async transformFileToJSON(sftp: SFTPClient, file: FileSettings): Promise<Array<Record<string, unknown>>> {
     try {
       const fileData = await sftp.get(file.path);
 
@@ -138,33 +139,32 @@ export class ExecutorService {
       }
 
       if (file.file_type === FileType.JSON) {
-        const parsed = JSON.parse(decoded);
-        return Array.isArray(parsed) ? parsed : [parsed];
+        const raw: unknown = JSON.parse(decoded);
+        if (Array.isArray(raw)) return raw as Array<Record<string, unknown>>;
+        if (typeof raw === 'object' && raw !== null) return [raw as Record<string, unknown>];
+        return [];
       }
 
-      if (file.file_type === FileType.CSV || file.file_type === FileType.TSV) {
-        const records = parse(decoded, {
-          delimiter: file.file_type === FileType.CSV ? (file.delimiter ?? ',') : '\t',
-          columns: (headers: string[]) =>
-            headers.map((h) =>
-              h
-                .trim()
-                .toLowerCase()
-                .replace(/\s+/g, '_')
-                .replace(/[^\w_]/g, ''),
-            ),
-          skip_empty_lines: true,
-          trim: true,
-          relax_quotes: true,
-          quote: '"',
-          relax_column_count: true,
-          escape: '"',
-          record_delimiter: ['\r\n', '\n', '\r'],
-        });
-        return records as Record<string, unknown>[];
-      }
-
-      throw new Error('Unsupported file type');
+      const delimiter = file.file_type === FileType.CSV ? (file.delimiter ?? ',') : '\t';
+      const records = parse(decoded, {
+        delimiter,
+        columns: (headers: string[]) =>
+          headers.map((h) =>
+            h
+              .trim()
+              .toLowerCase()
+              .replace(/\s+/g, '_')
+              .replace(/[^\w_]/g, ''),
+          ),
+        skip_empty_lines: true,
+        trim: true,
+        relax_quotes: true,
+        quote: '"',
+        relax_column_count: true,
+        escape: '"',
+        record_delimiter: ['\r\n', '\n', '\r'],
+      });
+      return records as Array<Record<string, unknown>>;
     } catch (error) {
       this.loggerService.error('Error transforming file:', error);
       throw error;
@@ -173,7 +173,7 @@ export class ExecutorService {
 
   @ApmSpan('cron-job-schedule')
   async addCronJob(job: Job): Promise<void> {
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const { timeZone } = Intl.DateTimeFormat().resolvedOptions();
     const jobKey = `job-${job.id}-schedule-${job.schedule_id}`;
 
     const existingJob = this.schedulerRegistry.getCronJobs().get(jobKey);

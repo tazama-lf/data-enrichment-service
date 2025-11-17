@@ -1,11 +1,9 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-import { createParamDecorator, ExecutionContext } from '@nestjs/common';
+import { createParamDecorator, type ExecutionContext } from '@nestjs/common';
+import type { AuthenticatedUser, RequestWithUser } from './auth.types';
 
 // Export the callback function separately for testing
-export const getUserFromContext = (data: unknown, ctx: ExecutionContext) => {
-  const request = ctx.switchToHttp().getRequest();
+export const getUserFromContext = (data: unknown, ctx: ExecutionContext): AuthenticatedUser | undefined => {
+  const request = ctx.switchToHttp().getRequest<RequestWithUser>();
   return request.user;
 };
 

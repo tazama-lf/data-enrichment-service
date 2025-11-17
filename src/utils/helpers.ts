@@ -1,9 +1,9 @@
-import * as crypto from 'crypto';
+import * as crypto from 'node:crypto';
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+const { ENCRYPTION_KEY } = process.env;
 const buffer = Buffer.from(`${ENCRYPTION_KEY}`, 'utf8');
 
-export function decrypt(text: string) {
+export function decrypt(text: string): string {
   const [ivHex, encrypted] = text.split(':');
 
   const iv = Buffer.from(ivHex, 'hex');
