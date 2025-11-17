@@ -39,18 +39,6 @@ export class EnvironmentVariables {
   REDIS_PASSWORD!: string;
 
   @IsString()
-  SFTP_HOST_DEV!: string;
-
-  @IsNumber()
-  SFTP_PORT_DEV!: number;
-
-  @IsString()
-  SFTP_USERNAME_DEV!: string;
-
-  @IsString()
-  SFTP_PASSWORD_DEV!: string;
-
-  @IsString()
   SERVER_URL!: string;
 
   @IsString()
