@@ -186,7 +186,7 @@ export class ExecutorService {
     await this.redis.set(jobKey, 0, this.cacheTtl);
 
     const cronJob = new CronJob(
-      job.cron,
+      job.cron!,
       async () => {
         await this.run(job, jobKey);
       },
