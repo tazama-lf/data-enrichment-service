@@ -94,23 +94,15 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
           LIMIT 1;
         `
           : `
-          SELECT 
-              j.*, 
-              s.cron,
-              s.start_date,
-              s.end_date
-          FROM pull_jobs j
-          LEFT JOIN cron_jobs s ON j.schedule_id = s.id
-          WHERE 
-              j.id = $1
-              AND j.status = 'STATUS_08_DEPLOYED'
-              AND j.publishing_status = 'active'
-              AND (
-                  s.start_date::date = CURRENT_DATE
-                  OR s.end_date::date = CURRENT_DATE
-              )
-          ORDER BY j.created_at DESC
-          LIMIT 1;
+        SELECT 
+          j.*, 
+           s.cron,
+           s.start_date,
+           s.end_date
+            FROM pull_jobs j
+             LEFT JOIN cron_jobs s ON j.schedule_id = s.id
+              WHERE j.id = $1
+               LIMIT 1;
         `;
 
       const result = await this.db.query(query, [endpointId]);
