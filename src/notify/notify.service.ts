@@ -76,12 +76,12 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
 
   async handleNatsMessage(reqObj: unknown, handleResponse: (response: object) => Promise<void>): Promise<void> {
     const { dataPayload } = reqObj as { dataPayload: string };
-    this.logger.log(`RECEIVING MESSAGE ${dataPayload}`);
 
     const payload = JSON.parse(dataPayload) as {
       endpointId: string;
       configType: ConfigType;
     };
+    this.logger.log(`RECEIVING MESSAGE ${JSON.stringify(payload)}`);
 
     const { endpointId, configType } = payload;
     try {
@@ -114,11 +114,9 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
         `;
 
       const result = await this.db.query(query, [endpointId]);
-      const record = result.rows[0] as PushJob | Job | undefined;
+      const record = result.rows[0] as PushJob | Job;
 
-      if (!record) {
-        this.logger.warn(`No configuration found for ID: ${endpointId}`);
-      } else if (configType === ConfigType.PUSH) {
+      if (configType === ConfigType.PUSH) {
         await this.redis.setJson(record.path!, JSON.stringify(record), this.cacheTtl);
         this.logger.log(`Updated cache for key: ${record.path}`);
       } else {
