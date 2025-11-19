@@ -173,8 +173,9 @@ export class ExecutorService {
 
   @ApmSpan('cron-job-delete')
   async deleteCronJob(jobId: string, scheduleId: string): Promise<void> {
-    const jobKey = getJobKey(jobId, scheduleId);
+    this.loggerService.log('Executing Delete cron Job');
 
+    const jobKey = getJobKey(jobId, scheduleId);
     const existingJob = this.schedulerRegistry.getCronJobs().get(jobKey);
     if (existingJob) {
       this.loggerService.warn(`Cron job ${jobKey} exists. Stopping.`);
@@ -185,6 +186,8 @@ export class ExecutorService {
 
   @ApmSpan('cron-job-schedule')
   async addCronJob(job: Job): Promise<void> {
+    this.loggerService.log('Executing add cron Job');
+
     const { timeZone } = Intl.DateTimeFormat().resolvedOptions();
     const jobKey = getJobKey(job.id, job.schedule_id!);
 
