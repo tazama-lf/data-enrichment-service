@@ -1,11 +1,12 @@
 import * as dotenv from 'dotenv';
-dotenv.config({ path: '.env' });
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { ApmInterceptor } from './apm/apm.interceptor';
 import { ApmService } from './apm/apm.service';
 import { ConfigService } from '@nestjs/config';
+import { json } from 'express';
+dotenv.config({ path: '.env' });
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
@@ -15,7 +16,7 @@ async function bootstrap(): Promise<void> {
   // Initialize APM interceptor for global transaction monitoring
   const apmService = app.get(ApmService);
   app.useGlobalInterceptors(new ApmInterceptor(apmService));
-
+  app.use(json({ limit: '50mb' }));
   app.enableCors({
     origin: true,
     credentials: true,
