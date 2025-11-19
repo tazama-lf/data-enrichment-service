@@ -17,3 +17,7 @@ export function decrypt(text: string): string {
 export function isValidText(text: string): boolean {
   return !/�{3,}/.test(text);
 }
+
+export function getJobKey(jobId: string, scheduleId: string): string {
+  return `job-${jobId}-schedule-${scheduleId}`;
+}

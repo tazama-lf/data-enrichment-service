@@ -2,7 +2,7 @@ import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
 import { onMessageFunction, StartupFactory } from '@tazama-lf/frms-coe-startup-lib';
-import { ConfigType, Job, PushJob } from '@tazama-lf/tcs-lib';
+import { ConfigType, Job, PushJob, ScheduleStatus } from '@tazama-lf/tcs-lib';
 import { DatabaseService } from '../database/database.service';
 import { ExecutorService } from '../executor/executor.service';
 
@@ -112,7 +112,14 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
         await this.redis.setJson(record.path!, JSON.stringify(record), this.cacheTtl);
         this.logger.log(`Updated cache for key: ${record.path}`);
       } else {
-        await this.executorService.addCronJob(record as Job);
+        const data = record as Job;
+        const isActive = data.publishing_status === ScheduleStatus.ACTIVE;
+
+        if (isActive) {
+          await this.executorService.addCronJob(data);
+        } else {
+          await this.executorService.deleteCronJob(data.id, data.schedule_id!);
+        }
       }
 
       await handleResponse({

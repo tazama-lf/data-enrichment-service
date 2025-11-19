@@ -11,7 +11,7 @@ import { firstValueFrom } from 'rxjs';
 import SFTPClient from 'ssh2-sftp-client';
 import { ApmSpan } from '../apm/apm.decorators';
 import { DatabaseService } from '../database/database.service';
-import { decrypt, isValidText } from '../utils/helpers';
+import { decrypt, getJobKey, isValidText } from '../utils/helpers';
 @Injectable()
 export class ExecutorService {
   private readonly cacheTtl: number;
@@ -171,17 +171,22 @@ export class ExecutorService {
     }
   }
 
-  @ApmSpan('cron-job-schedule')
-  async addCronJob(job: Job): Promise<void> {
-    const { timeZone } = Intl.DateTimeFormat().resolvedOptions();
-    const jobKey = `job-${job.id}-schedule-${job.schedule_id}`;
+  @ApmSpan('cron-job-delete')
+  async deleteCronJob(jobId: string, scheduleId: string): Promise<void> {
+    const jobKey = getJobKey(jobId, scheduleId);
 
     const existingJob = this.schedulerRegistry.getCronJobs().get(jobKey);
     if (existingJob) {
-      this.loggerService.warn(`Cron job ${jobKey} already exists. Stopping and restarting.`);
+      this.loggerService.warn(`Cron job ${jobKey} exists. Stopping.`);
       await existingJob.stop();
       this.schedulerRegistry.deleteCronJob(jobKey);
     }
+  }
+
+  @ApmSpan('cron-job-schedule')
+  async addCronJob(job: Job): Promise<void> {
+    const { timeZone } = Intl.DateTimeFormat().resolvedOptions();
+    const jobKey = getJobKey(job.id, job.schedule_id!);
 
     await this.redis.set(jobKey, 0, this.cacheTtl);
 
