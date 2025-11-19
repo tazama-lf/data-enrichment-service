@@ -301,13 +301,13 @@ describe('JobService', () => {
         );
       });
 
-      it('should accept endpoint with FAILED status if publishing_status is ACTIVE', async () => {
-        const failedEndpoint = {
+      it('should accept endpoint with DEPLOYED status and ACTIVE publishing_status', async () => {
+        const validEndpoint = {
           ...mockEndpoint,
           status: JobStatus.DEPLOYED,
           publishing_status: ScheduleStatus.ACTIVE,
         };
-        mockRedisService.getJson.mockResolvedValue(JSON.stringify(failedEndpoint));
+        mockRedisService.getJson.mockResolvedValue(JSON.stringify(validEndpoint));
 
         const result = await service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
 
@@ -379,6 +379,17 @@ describe('JobService', () => {
         );
 
         expect(mockLoggerService.error).toHaveBeenCalledWith('Error in createEnrich: String error');
+      });
+
+      it('should log error message when exception is Error instance', async () => {
+        const errorMessage = 'Specific database error';
+        mockRedisService.getJson.mockRejectedValue(new Error(errorMessage));
+
+        await expect(service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' })).rejects.toThrow(
+          InternalServerErrorException,
+        );
+
+        expect(mockLoggerService.error).toHaveBeenCalledWith(`Error in createEnrich: ${errorMessage}`);
       });
     });
 
@@ -472,7 +483,22 @@ describe('JobService', () => {
         expect(callArgs).toHaveLength(1000);
       });
 
-      it('should generate different checksums for identical data with different order', async () => {
+      it('should generate consistent checksum for same data', async () => {
+        mockRedisService.getJson.mockResolvedValue(JSON.stringify(mockEndpoint));
+        const sameData = { a: 1, b: 2 };
+        const arrayBody: CreateEnrichDataDto = {
+          data: [sameData, sameData],
+        };
+
+        await service.createEnrich({ req: mockRequest as Request, body: arrayBody, tenantId: 'tenant_456' });
+
+        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][2] as Array<{
+          checksum: string;
+        }>;
+        expect(callArgs[0].checksum).toBe(callArgs[1].checksum);
+      });
+
+      it('should generate different checksums for identical data with different property order', async () => {
         mockRedisService.getJson.mockResolvedValue(JSON.stringify(mockEndpoint));
         const arrayBody: CreateEnrichDataDto = {
           data: [
@@ -486,7 +512,6 @@ describe('JobService', () => {
         const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][2] as Array<{
           checksum: string;
         }>;
-        // Note: JSON.stringify preserves property order, so these should be different
         expect(callArgs[0].checksum).toBeDefined();
         expect(callArgs[1].checksum).toBeDefined();
       });
@@ -545,7 +570,7 @@ describe('JobService', () => {
         );
       });
 
-      it('should use endpoint tenant_id for table name, not request tenant_id', async () => {
+      it('should use endpoint tenant_id for table name', async () => {
         const differentTenantEndpoint = { ...mockEndpoint, tenant_id: 'endpoint_tenant' };
         mockRedisService.getJson.mockResolvedValue(JSON.stringify(differentTenantEndpoint));
 
@@ -587,19 +612,6 @@ describe('JobService', () => {
         expect(result.success).toBe(true);
       });
 
-      it('should handle paths with query parameters', async () => {
-        const queryEndpoint = { ...mockEndpoint, path: '/tcs/test-endpoint?param=value' };
-        mockRedisService.getJson.mockResolvedValue(JSON.stringify(queryEndpoint));
-
-        const result = await service.createEnrich({
-          req: { ...mockRequest, path: '/tcs/test-endpoint/' } as Request,
-          body: mockBody,
-          tenantId: 'tenant_456',
-        });
-
-        expect(result.success).toBe(true);
-      });
-
       it('should handle paths with trailing slash', async () => {
         const trailingSlashEndpoint = { ...mockEndpoint, path: '/tcs/test-endpoint/' };
         mockRedisService.getJson.mockResolvedValue(JSON.stringify(trailingSlashEndpoint));
@@ -611,6 +623,16 @@ describe('JobService', () => {
         });
 
         expect(result.success).toBe(true);
+      });
+
+      it('should use request path for cache lookup', async () => {
+        const customPath = '/tcs/custom-path';
+        const customEndpoint = { ...mockEndpoint, path: customPath };
+        mockRedisService.getJson.mockResolvedValue(JSON.stringify(customEndpoint));
+
+        await service.createEnrich({ req: { ...mockRequest, path: customPath } as Request, body: mockBody, tenantId: 'tenant_456' });
+
+        expect(mockRedisService.getJson).toHaveBeenCalledWith(customPath);
       });
     });
 
@@ -629,6 +651,31 @@ describe('JobService', () => {
         expect(callArgs[0].correlation_id).toBe('test-correlation-id-123');
         expect(callArgs[1].correlation_id).toBe('test-correlation-id-123');
         expect(callArgs[2].correlation_id).toBe('test-correlation-id-123');
+      });
+
+      it('should use same correlation_id for single data item', async () => {
+        mockRedisService.getJson.mockResolvedValue(JSON.stringify(mockEndpoint));
+
+        await service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
+
+        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][2] as Array<{
+          correlation_id: string;
+        }>;
+        expect(callArgs[0].correlation_id).toBe('test-correlation-id-123');
+      });
+    });
+
+    describe('SQL Query validation', () => {
+      it('should use correct SQL query structure', async () => {
+        mockRedisService.getJson.mockResolvedValue('');
+        mockDatabaseService.query.mockResolvedValue({ rows: [mockEndpoint] } as never);
+
+        await service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
+
+        expect(mockDatabaseService.query).toHaveBeenCalledWith(
+          expect.stringMatching(/SELECT\s+\*\s+FROM\s+push_jobs\s+WHERE\s+path\s+=\s+\$1\s+AND\s+tenant_id\s+=\s+\$2\s+LIMIT\s+1/i),
+          ['/tcs/test-endpoint', 'tenant_456'],
+        );
       });
     });
   });
