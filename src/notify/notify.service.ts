@@ -116,9 +116,9 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
         const isActive = data.publishing_status === ScheduleStatus.ACTIVE;
 
         if (isActive) {
-          await this.executorService.addCronJob(data);
-        } else {
           await this.executorService.deleteCronJob(data.id, data.schedule_id!);
+        } else {
+          await this.executorService.addCronJob(data);
         }
       }
 
