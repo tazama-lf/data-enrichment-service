@@ -25,9 +25,10 @@ export class DatabaseService {
         throw new Error('No data provided for insertion.');
       }
 
+      this.loggerService.log(`Inserting rows with length ${rows.length}`);
+
       const keys = Object.keys(rows[0]);
 
-      let insertedCount = 0;
       const batchSize = 1000;
 
       for (let i = 0; i < rows.length; i += batchSize) {
@@ -45,9 +46,6 @@ export class DatabaseService {
       `;
 
         await this.query(insertQuery, values);
-        insertedCount += batch.length;
-
-        this.loggerService.log(`Inserted ${batch.length} row(s). Total inserted: ${insertedCount}.`);
       }
 
       this.loggerService.log(`Successfully inserted ${rows.length} row(s) into "${tableName}".`);
