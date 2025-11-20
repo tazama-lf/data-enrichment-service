@@ -26,18 +26,29 @@ export class DatabaseService {
       }
 
       const keys = Object.keys(rows[0]);
-      const placeholders = rows
-        .map((_, rowIndex) => `(${keys.map((_, colIndex) => `$${rowIndex * keys.length + colIndex + 1}`).join(', ')})`)
-        .join(', ');
 
-      const values = rows.flatMap((row) => Object.values(row));
+      let insertedCount = 0;
+      const batchSize = 1000;
 
-      const insertQuery = `
-      INSERT INTO ${tableName} (${keys.join(', ')})
-      VALUES ${placeholders};
-    `;
+      for (let i = 0; i < rows.length; i += batchSize) {
+        const batch = rows.slice(i, i + batchSize);
 
-      await this.query(insertQuery, values);
+        const placeholders = batch
+          .map((_, rowIndex) => `(${keys.map((_, colIndex) => `$${rowIndex * keys.length + colIndex + 1}`).join(', ')})`)
+          .join(', ');
+
+        const values = batch.flatMap((row) => keys.map((k) => row[k]));
+
+        const insertQuery = `
+        INSERT INTO ${tableName} (${keys.join(', ')})
+        VALUES ${placeholders};
+      `;
+
+        await this.query(insertQuery, values);
+        insertedCount += batch.length;
+
+        this.loggerService.log(`Inserted ${batch.length} row(s). Total inserted: ${insertedCount}.`);
+      }
 
       this.loggerService.log(`Successfully inserted ${rows.length} row(s) into "${tableName}".`);
     } catch (error: unknown) {
