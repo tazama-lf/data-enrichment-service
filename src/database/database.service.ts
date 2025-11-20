@@ -3,15 +3,22 @@ import { LoggerService } from '@tazama-lf/frms-coe-lib';
 import { Pool, QueryResult, QueryResultRow } from 'pg';
 import { v4 } from 'uuid';
 import { Enrichment, IngestMode } from '@tazama-lf/tcs-lib';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class DatabaseService {
   private readonly pool: Pool;
-  constructor(private readonly loggerService: LoggerService) {
+  private readonly batchSize: number;
+
+  constructor(
+    private readonly loggerService: LoggerService,
+    private readonly configService: ConfigService,
+  ) {
     this.pool = new Pool({
       connectionString: process.env.CONFIGURATION_DATABASE_URL,
       max: 10,
     });
+    this.batchSize = this.configService.get<number>('BATCH_SIZE', 1000);
   }
 
   async query<T extends QueryResultRow = QueryResultRow>(sql: string, params?: unknown[]): Promise<QueryResult<T>> {
@@ -29,10 +36,8 @@ export class DatabaseService {
 
       const keys = Object.keys(rows[0]);
 
-      const batchSize = 1000;
-
-      for (let i = 0; i < rows.length; i += batchSize) {
-        const batch = rows.slice(i, i + batchSize);
+      for (let i = 0; i < rows.length; i += this.batchSize) {
+        const batch = rows.slice(i, i + this.batchSize);
 
         const placeholders = batch
           .map((_, rowIndex) => `(${keys.map((_, colIndex) => `$${rowIndex * keys.length + colIndex + 1}`).join(', ')})`)
