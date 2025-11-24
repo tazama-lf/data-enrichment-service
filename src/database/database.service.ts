@@ -82,6 +82,7 @@ export class DatabaseService {
         CREATE TABLE IF NOT EXISTS ${tableName} (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           data JSONB NOT NULL,
+          job_id TEXT NOT NULL,
           created_at TIMESTAMP NOT NULL DEFAULT NOW()
         );
       `;
@@ -121,13 +122,14 @@ export class DatabaseService {
     }
   }
 
-  async updateTable(tableName: string, mode: IngestMode, data: unknown): Promise<void> {
+  async updateTable(tableName: string, id: string, mode: IngestMode, data: unknown): Promise<void> {
     await this.ensureTable(tableName);
     const arr = Array.isArray(data) ? data : Object.values(data as Record<string, unknown>).flat();
 
     const rows = arr.map((item) => ({
       id: v4(),
       data: JSON.stringify(item),
+      job_id: id,
     }));
 
     if (mode === IngestMode.APPEND) {
