@@ -205,7 +205,7 @@ describe('ExecutorService', () => {
       expect(mockHttpService.get).toHaveBeenCalledWith('https://api.example.com/data', {
         headers: { Authorization: 'Bearer token' },
       });
-      expect(mockDatabaseService.updateTable).toHaveBeenCalledWith('tenant-456_test_table', IngestMode.APPEND, { key: 'value' });
+      expect(mockDatabaseService.updateTable).toHaveBeenCalledWith('tenant-456_test_table', 'job-123', IngestMode.APPEND, { key: 'value' });
       expect(mockRedisService.set).toHaveBeenCalledWith('job-key', 0, 86400);
     });
 
@@ -223,7 +223,10 @@ describe('ExecutorService', () => {
 
       await service.handleHttpJob(httpJob, 'job-key');
 
-      expect(mockDatabaseService.updateTable).toHaveBeenCalledWith('tenant-456_test_table', IngestMode.APPEND, [{ id: 1 }, { id: 2 }]);
+      expect(mockDatabaseService.updateTable).toHaveBeenCalledWith('tenant-456_test_table', 'job-123', IngestMode.APPEND, [
+        { id: 1 },
+        { id: 2 },
+      ]);
     });
 
     it('should handle failure when status is not 200', async () => {
@@ -300,7 +303,7 @@ describe('ExecutorService', () => {
 
       await service.handleHttpJob(httpJob, 'job-key');
 
-      expect(mockDatabaseService.updateTable).toHaveBeenCalledWith('tenant-456_test_table', IngestMode.APPEND, null);
+      expect(mockDatabaseService.updateTable).toHaveBeenCalledWith('tenant-456_test_table', 'job-123', IngestMode.APPEND, null);
     });
   });
 
@@ -401,7 +404,9 @@ describe('ExecutorService', () => {
 
       expect(mockSftpClient.exists).toHaveBeenCalledWith('/data/test.json');
       expect(mockSftpClient.get).toHaveBeenCalledWith('/data/test.json');
-      expect(mockDatabaseService.updateTable).toHaveBeenCalledWith('tenant-456_test_table', IngestMode.APPEND, [{ key: 'value' }]);
+      expect(mockDatabaseService.updateTable).toHaveBeenCalledWith('tenant-456_test_table', 'job-123', IngestMode.APPEND, [
+        { key: 'value' },
+      ]);
       expect(mockRedisService.set).toHaveBeenCalledWith('job-key', 0, 86400);
       expect(mockSftpClient.end).toHaveBeenCalled();
     });
