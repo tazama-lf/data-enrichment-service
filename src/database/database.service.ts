@@ -34,7 +34,7 @@ export class DatabaseService {
     tenantId: string,
   ): Promise<void> {
     const query = `
-    INSERT INTO pull_job_history (tenant_id, jobId, counts, processed_counts, exception)
+    INSERT INTO pull_job_history (tenant_id, job_id, counts, processed_counts, exception)
     VALUES ($1, $2, $3, $4, $5);
   `;
 
