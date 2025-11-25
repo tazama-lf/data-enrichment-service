@@ -107,6 +107,7 @@ describe('JobService', () => {
         expect(mockDatabaseService.updateTableWithMetaData).toHaveBeenCalledWith(
           'tenant_456_test_table',
           'endpoint-123',
+          'tenant_456',
           IngestMode.APPEND,
           expect.arrayContaining([
             expect.objectContaining({
@@ -156,6 +157,7 @@ describe('JobService', () => {
         expect(mockDatabaseService.updateTableWithMetaData).toHaveBeenCalledWith(
           'tenant_456_test_table',
           'endpoint-123',
+          'tenant_456',
           IngestMode.APPEND,
           expect.arrayContaining([
             expect.objectContaining({ data: { id: 1 } }),
@@ -174,7 +176,7 @@ describe('JobService', () => {
 
         await service.createEnrich({ req: mockRequest as Request, body: arrayBody, tenantId: 'tenant_456' });
 
-        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][3] as Array<{
+        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][4] as Array<{
           checksum: string;
           data: Record<string, unknown>;
         }>;
@@ -188,7 +190,7 @@ describe('JobService', () => {
 
         await service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
 
-        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][3] as Array<{
+        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][4] as Array<{
           correlation_id: string;
         }>;
         expect(callArgs[0].correlation_id).toBe('test-correlation-id-123');
@@ -203,6 +205,7 @@ describe('JobService', () => {
         expect(mockDatabaseService.updateTableWithMetaData).toHaveBeenCalledWith(
           'tenant_456_test_table',
           'endpoint-123',
+          'tenant_456',
           IngestMode.REPLACE,
           expect.any(Array),
         );
@@ -216,6 +219,7 @@ describe('JobService', () => {
         expect(mockDatabaseService.updateTableWithMetaData).toHaveBeenCalledWith(
           'tenant_456_test_table',
           'endpoint-123',
+          'tenant_456',
           IngestMode.APPEND,
           expect.any(Array),
         );
@@ -430,7 +434,7 @@ describe('JobService', () => {
         const result = await service.createEnrich({ req: mockRequest as Request, body: complexBody, tenantId: 'tenant_456' });
 
         expect(result.success).toBe(true);
-        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][3] as Array<{
+        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][4] as Array<{
           data: Record<string, unknown>;
         }>;
         expect(callArgs[0].data).toEqual(complexBody.data);
@@ -450,7 +454,7 @@ describe('JobService', () => {
 
         await service.createEnrich({ req: mockRequest as Request, body: typedBody, tenantId: 'tenant_456' });
 
-        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][3] as Array<{
+        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][4] as Array<{
           data: Record<string, unknown>;
         }>;
         expect(callArgs[0].data).toEqual(typedBody.data);
@@ -465,7 +469,7 @@ describe('JobService', () => {
         const result = await service.createEnrich({ req: mockRequest as Request, body: emptyBody, tenantId: 'tenant_456' });
 
         expect(result.success).toBe(true);
-        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][3] as Array<{
+        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][4] as Array<{
           data: Record<string, unknown>;
         }>;
         expect(callArgs[0].data).toEqual({});
@@ -483,6 +487,7 @@ describe('JobService', () => {
         expect(mockDatabaseService.updateTableWithMetaData).toHaveBeenCalledWith(
           'tenant_456_test_table',
           'endpoint-123',
+          'tenant_456',
           IngestMode.APPEND,
           [],
         );
@@ -498,7 +503,7 @@ describe('JobService', () => {
         const result = await service.createEnrich({ req: mockRequest as Request, body: largeBody, tenantId: 'tenant_456' });
 
         expect(result.success).toBe(true);
-        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][3] as Array<{
+        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][4] as Array<{
           data: Record<string, unknown>;
         }>;
         expect(callArgs).toHaveLength(1000);
@@ -513,7 +518,7 @@ describe('JobService', () => {
 
         await service.createEnrich({ req: mockRequest as Request, body: arrayBody, tenantId: 'tenant_456' });
 
-        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][3] as Array<{
+        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][4] as Array<{
           checksum: string;
         }>;
         expect(callArgs[0].checksum).toBe(callArgs[1].checksum);
@@ -530,7 +535,7 @@ describe('JobService', () => {
 
         await service.createEnrich({ req: mockRequest as Request, body: arrayBody, tenantId: 'tenant_456' });
 
-        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][3] as Array<{
+        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][4] as Array<{
           checksum: string;
         }>;
         expect(callArgs[0].checksum).toBeDefined();
@@ -587,6 +592,7 @@ describe('JobService', () => {
         expect(mockDatabaseService.updateTableWithMetaData).toHaveBeenCalledWith(
           'tenant_456_test_table',
           'endpoint-123',
+          'tenant_456',
           IngestMode.APPEND,
           expect.any(Array),
         );
@@ -601,6 +607,7 @@ describe('JobService', () => {
         expect(mockDatabaseService.updateTableWithMetaData).toHaveBeenCalledWith(
           'endpoint_tenant_test_table',
           'endpoint-123',
+          'endpoint_tenant',
           IngestMode.APPEND,
           expect.any(Array),
         );
@@ -615,6 +622,7 @@ describe('JobService', () => {
         expect(mockDatabaseService.updateTableWithMetaData).toHaveBeenCalledWith(
           'tenant_456_test_table_2024',
           'endpoint-123',
+          'tenant_456',
           IngestMode.APPEND,
           expect.any(Array),
         );
@@ -669,7 +677,7 @@ describe('JobService', () => {
 
         await service.createEnrich({ req: mockRequest as Request, body: arrayBody, tenantId: 'tenant_456' });
 
-        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][3] as Array<{
+        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][4] as Array<{
           correlation_id: string;
         }>;
         expect(callArgs[0].correlation_id).toBe('test-correlation-id-123');
@@ -682,7 +690,7 @@ describe('JobService', () => {
 
         await service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
 
-        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][3] as Array<{
+        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][4] as Array<{
           correlation_id: string;
         }>;
         expect(callArgs[0].correlation_id).toBe('test-correlation-id-123');

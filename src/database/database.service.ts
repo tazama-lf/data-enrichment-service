@@ -26,13 +26,19 @@ export class DatabaseService {
     return result;
   }
 
-  private async insertPullJobHistory(jobId: string, counts: number, processedCounts: number, exception: string | null): Promise<void> {
+  private async insertPullJobHistory(
+    jobId: string,
+    counts: number,
+    processedCounts: number,
+    exception: string | null,
+    tenantId: string,
+  ): Promise<void> {
     const query = `
-    INSERT INTO pull_job_history (jobId, counts, processed_counts, exception)
-    VALUES ($1, $2, $3, $4);
+    INSERT INTO pull_job_history (tenant_id, jobId, counts, processed_counts, exception)
+    VALUES ($1, $2, $3, $4, $5);
   `;
 
-    const params = [jobId, counts, processedCounts, exception];
+    const params = [tenantId, jobId, counts, processedCounts, exception];
 
     try {
       await this.query(query, params);
@@ -42,7 +48,7 @@ export class DatabaseService {
     }
   }
 
-  async insertRows(tableName: string, rows: Array<Record<string, unknown>>, jobId: string): Promise<void> {
+  async insertRows(tableName: string, rows: Array<Record<string, unknown>>, jobId: string, tenantId: string): Promise<void> {
     let processedCount = 0;
     try {
       if (rows.length === 0) {
@@ -71,14 +77,14 @@ export class DatabaseService {
         processedCount += batch.length;
       }
 
-      await this.insertPullJobHistory(jobId, rows.length, processedCount, null);
+      await this.insertPullJobHistory(jobId, rows.length, processedCount, null, tenantId);
 
       this.loggerService.log(`Successfully inserted ${rows.length} row(s) into "${tableName}".`);
     } catch (error: unknown) {
       const errorMsg = error instanceof Error ? error.message : JSON.stringify(error);
 
       this.loggerService.error(`Error inserting rows into table "${tableName}": ${errorMsg}`);
-      await this.insertPullJobHistory(jobId, rows.length, processedCount, errorMsg);
+      await this.insertPullJobHistory(jobId, rows.length, processedCount, errorMsg, tenantId);
     }
   }
 
@@ -141,7 +147,7 @@ export class DatabaseService {
     }
   }
 
-  async updateTable(tableName: string, jobId: string, mode: IngestMode, data: unknown): Promise<void> {
+  async updateTable(tableName: string, jobId: string, mode: IngestMode, data: unknown, tenantId: string): Promise<void> {
     await this.ensureTable(tableName);
     const arr = Array.isArray(data) ? data : Object.values(data as Record<string, unknown>).flat();
 
@@ -152,15 +158,15 @@ export class DatabaseService {
     }));
 
     if (mode === IngestMode.APPEND) {
-      await this.insertRows(tableName, rows, jobId);
+      await this.insertRows(tableName, rows, jobId, tenantId);
     } else {
       const deleteQuery = `DELETE FROM ${tableName};`;
       await this.query(deleteQuery);
-      await this.insertRows(tableName, rows, jobId);
+      await this.insertRows(tableName, rows, jobId, tenantId);
     }
   }
 
-  async updateTableWithMetaData(tableName: string, jobId: string, mode: IngestMode, data: Enrichment[]): Promise<void> {
+  async updateTableWithMetaData(tableName: string, jobId: string, tenantId: string, mode: IngestMode, data: Enrichment[]): Promise<void> {
     await this.ensureTableWithMetaData(tableName);
 
     const rows = data.map((item) => ({
@@ -172,11 +178,11 @@ export class DatabaseService {
       checksum: item.checksum,
     }));
     if (mode === IngestMode.APPEND) {
-      await this.insertRows(tableName, rows, jobId);
+      await this.insertRows(tableName, rows, jobId, tenantId);
     } else {
       const deleteQuery = `DELETE FROM ${tableName};`;
       await this.query(deleteQuery);
-      await this.insertRows(tableName, rows, jobId);
+      await this.insertRows(tableName, rows, jobId, tenantId);
     }
   }
 }

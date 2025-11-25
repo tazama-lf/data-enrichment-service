@@ -248,10 +248,16 @@ describe('DatabaseService', () => {
       (mockPool.query as jest.Mock).mockResolvedValue({} as QueryResult);
       const rows = [{ id: '1', name: 'test', value: 100 }];
 
-      await service.insertRows('test_table', rows, 'job-123');
+      await service.insertRows('test_table', rows, 'job-123', 'tenant-123');
 
       expect(mockPool.query).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO test_table/i), ['1', 'test', 100]);
-      expect(mockPool.query).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO pull_job_history/i), ['job-123', 1, 1, null]);
+      expect(mockPool.query).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO pull_job_history/i), [
+        'tenant-123',
+        'job-123',
+        1,
+        1,
+        null,
+      ]);
       expect(mockLoggerService.log).toHaveBeenCalledWith('Inserting rows with length 1');
       expect(mockLoggerService.log).toHaveBeenCalledWith('Successfully inserted 1 row(s) into "test_table".');
       expect(mockLoggerService.log).toHaveBeenCalledWith('Inserted pull job history for jobId: job-123');
@@ -265,7 +271,7 @@ describe('DatabaseService', () => {
         { id: '3', name: 'test3' },
       ];
 
-      await service.insertRows('test_table', rows, 'job-123');
+      await service.insertRows('test_table', rows, 'job-123', 'tenant-123');
 
       expect(mockPool.query).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO test_table/i), [
         '1',
@@ -281,10 +287,11 @@ describe('DatabaseService', () => {
     it('should handle empty rows array', async () => {
       (mockPool.query as jest.Mock).mockResolvedValue({} as QueryResult);
 
-      await service.insertRows('test_table', [], 'job-123');
+      await service.insertRows('test_table', [], 'job-123', 'tenant-123');
 
       expect(mockLoggerService.error).toHaveBeenCalledWith(expect.stringContaining('No data provided for insertion'));
       expect(mockPool.query).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO pull_job_history/i), [
+        'tenant-123',
         'job-123',
         0,
         0,
@@ -314,7 +321,7 @@ describe('DatabaseService', () => {
         { id: '5', name: 'test5' },
       ];
 
-      await batchService.insertRows('test_table', rows, 'job-123');
+      await batchService.insertRows('test_table', rows, 'job-123', 'tenant-123');
 
       const insertCalls = (batchPool.query as jest.Mock).mock.calls.filter((call) =>
         (call[0] as string).includes('INSERT INTO test_table'),
@@ -326,10 +333,11 @@ describe('DatabaseService', () => {
       (mockPool.query as jest.Mock).mockRejectedValueOnce(new Error('Insertion failed')).mockResolvedValue({} as QueryResult);
       const rows = [{ id: '1', name: 'test' }];
 
-      await service.insertRows('test_table', rows, 'job-123');
+      await service.insertRows('test_table', rows, 'job-123', 'tenant-123');
 
       expect(mockLoggerService.error).toHaveBeenCalledWith('Error inserting rows into table "test_table": Insertion failed');
       expect(mockPool.query).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO pull_job_history/i), [
+        'tenant-123',
         'job-123',
         1,
         0,
@@ -342,12 +350,12 @@ describe('DatabaseService', () => {
       (mockPool.query as jest.Mock).mockRejectedValueOnce(errorObj).mockResolvedValue({} as QueryResult);
       const rows = [{ id: '1', name: 'test' }];
 
-      await service.insertRows('test_table', rows, 'job-123');
+      await service.insertRows('test_table', rows, 'job-123', 'tenant-123');
 
       expect(mockLoggerService.error).toHaveBeenCalledWith(expect.stringContaining('Error inserting rows into table "test_table"'));
       expect(mockPool.query).toHaveBeenCalledWith(
         expect.stringMatching(/INSERT INTO pull_job_history/i),
-        expect.arrayContaining(['job-123', 1, 0, expect.any(String)]),
+        expect.arrayContaining(['tenant-123', 'job-123', 1, 0, expect.any(String)]),
       );
     });
 
@@ -371,9 +379,15 @@ describe('DatabaseService', () => {
         { id: '3', name: 'test3' },
       ];
 
-      await batchService.insertRows('test_table', rows, 'job-123');
+      await batchService.insertRows('test_table', rows, 'job-123', 'tenant-123');
 
-      expect(batchPool.query).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO pull_job_history/i), ['job-123', 3, 3, null]);
+      expect(batchPool.query).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO pull_job_history/i), [
+        'tenant-123',
+        'job-123',
+        3,
+        3,
+        null,
+      ]);
     });
   });
 
@@ -382,7 +396,7 @@ describe('DatabaseService', () => {
       (mockPool.query as jest.Mock).mockResolvedValue({} as QueryResult);
       const data = [{ key: 'value1' }, { key: 'value2' }];
 
-      await service.updateTable('test_table', 'job-123', IngestMode.APPEND, data);
+      await service.updateTable('test_table', 'job-123', IngestMode.APPEND, data, 'tenant-123');
 
       expect(mockPool.query).toHaveBeenNthCalledWith(1, expect.stringMatching(/CREATE TABLE IF NOT EXISTS/i), undefined);
 
@@ -396,7 +410,7 @@ describe('DatabaseService', () => {
       (mockPool.query as jest.Mock).mockResolvedValue({} as QueryResult);
       const data = [{ key: 'value1' }];
 
-      await service.updateTable('test_table', 'job-123', IngestMode.REPLACE, data);
+      await service.updateTable('test_table', 'job-123', IngestMode.REPLACE, data, 'tenant-123');
 
       expect(mockPool.query).toHaveBeenNthCalledWith(1, expect.stringMatching(/CREATE TABLE IF NOT EXISTS/i), undefined);
 
@@ -409,7 +423,7 @@ describe('DatabaseService', () => {
       (mockPool.query as jest.Mock).mockResolvedValue({} as QueryResult);
       const data = { item1: { key: 'value1' }, item2: { key: 'value2' } };
 
-      await service.updateTable('test_table', 'job-123', IngestMode.APPEND, data);
+      await service.updateTable('test_table', 'job-123', IngestMode.APPEND, data, 'tenant-123');
 
       expect(mockPool.query).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO test_table/i), expect.any(Array));
     });
@@ -418,7 +432,7 @@ describe('DatabaseService', () => {
       (mockPool.query as jest.Mock).mockResolvedValue({} as QueryResult);
       const data = { key: 'value' };
 
-      await service.updateTable('test_table', 'job-123', IngestMode.APPEND, data);
+      await service.updateTable('test_table', 'job-123', IngestMode.APPEND, data, 'tenant-123');
 
       expect(mockPool.query).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO test_table/i), expect.any(Array));
     });
@@ -427,7 +441,7 @@ describe('DatabaseService', () => {
       (mockPool.query as jest.Mock).mockResolvedValue({} as QueryResult);
       const data = [{ nested: { key: 'value' } }];
 
-      await service.updateTable('test_table', 'job-123', IngestMode.APPEND, data);
+      await service.updateTable('test_table', 'job-123', IngestMode.APPEND, data, 'tenant-123');
 
       expect(mockPool.query).toHaveBeenCalledWith(
         expect.any(String),
@@ -439,7 +453,7 @@ describe('DatabaseService', () => {
       (mockPool.query as jest.Mock).mockResolvedValue({} as QueryResult);
       const data = [{ key: 'value' }];
 
-      await service.updateTable('test_table', 'job-123', IngestMode.APPEND, data);
+      await service.updateTable('test_table', 'job-123', IngestMode.APPEND, data, 'tenant-123');
 
       const createTableCall = (mockPool.query as jest.Mock).mock.calls.find((call) =>
         (call[0] as string).includes('CREATE TABLE IF NOT EXISTS'),
@@ -462,7 +476,7 @@ describe('DatabaseService', () => {
     it('should append data with metadata in APPEND mode', async () => {
       (mockPool.query as jest.Mock).mockResolvedValue({} as QueryResult);
 
-      await service.updateTableWithMetaData('test_table', 'job-123', IngestMode.APPEND, mockEnrichment);
+      await service.updateTableWithMetaData('test_table', 'job-123', 'tenant-123', IngestMode.APPEND, mockEnrichment);
 
       expect(mockPool.query).toHaveBeenNthCalledWith(1, expect.stringMatching(/CREATE TABLE IF NOT EXISTS/i), undefined);
 
@@ -479,7 +493,7 @@ describe('DatabaseService', () => {
     it('should replace data with metadata in REPLACE mode', async () => {
       (mockPool.query as jest.Mock).mockResolvedValue({} as QueryResult);
 
-      await service.updateTableWithMetaData('test_table', 'job-123', IngestMode.REPLACE, mockEnrichment);
+      await service.updateTableWithMetaData('test_table', 'job-123', 'tenant-123', IngestMode.REPLACE, mockEnrichment);
 
       expect(mockPool.query).toHaveBeenNthCalledWith(1, expect.stringContaining('CREATE TABLE IF NOT EXISTS test_table'), undefined);
 
@@ -507,7 +521,7 @@ describe('DatabaseService', () => {
         },
       ];
 
-      await service.updateTableWithMetaData('test_table', 'job-123', IngestMode.APPEND, enrichments);
+      await service.updateTableWithMetaData('test_table', 'job-123', 'tenant-123', IngestMode.APPEND, enrichments);
 
       expect(mockLoggerService.log).toHaveBeenCalledWith('Successfully inserted 2 row(s) into "test_table".');
     });
@@ -524,7 +538,7 @@ describe('DatabaseService', () => {
         },
       ];
 
-      await service.updateTableWithMetaData('test_table', 'job-123', IngestMode.APPEND, enrichment);
+      await service.updateTableWithMetaData('test_table', 'job-123', 'tenant-123', IngestMode.APPEND, enrichment);
 
       expect(mockPool.query).toHaveBeenCalledWith(
         expect.any(String),
@@ -535,7 +549,7 @@ describe('DatabaseService', () => {
     it('should handle empty enrichment array', async () => {
       (mockPool.query as jest.Mock).mockResolvedValue({} as QueryResult);
 
-      await service.updateTableWithMetaData('test_table', 'job-123', IngestMode.APPEND, []);
+      await service.updateTableWithMetaData('test_table', 'job-123', 'tenant-123', IngestMode.APPEND, []);
 
       expect(mockLoggerService.error).toHaveBeenCalledWith(expect.stringContaining('No data provided for insertion'));
     });
@@ -543,7 +557,7 @@ describe('DatabaseService', () => {
     it('should call ensureTableWithMetaData before inserting', async () => {
       (mockPool.query as jest.Mock).mockResolvedValue({} as QueryResult);
 
-      await service.updateTableWithMetaData('test_table', 'job-123', IngestMode.APPEND, mockEnrichment);
+      await service.updateTableWithMetaData('test_table', 'job-123', 'tenant-123', IngestMode.APPEND, mockEnrichment);
 
       const createTableCall = (mockPool.query as jest.Mock).mock.calls.find((call) => {
         const query = call[0] as string;
