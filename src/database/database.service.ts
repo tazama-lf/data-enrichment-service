@@ -26,7 +26,24 @@ export class DatabaseService {
     return result;
   }
 
-  async insertRows(tableName: string, rows: Array<Record<string, unknown>>): Promise<void> {
+  private async insertPullJobHistory(jobId: string, counts: number, processedCounts: number, exception: string | null): Promise<void> {
+    const query = `
+    INSERT INTO pull_job_history (jobId, counts, processed_counts, exception)
+    VALUES ($1, $2, $3, $4);
+  `;
+
+    const params = [jobId, counts, processedCounts, exception];
+
+    try {
+      await this.query(query, params);
+      this.loggerService.log(`Inserted pull job history for jobId: ${jobId}`);
+    } catch (error) {
+      this.loggerService.error(`Failed to insert pull_job_history: ${error instanceof Error ? error.message : JSON.stringify(error)}`);
+    }
+  }
+
+  async insertRows(tableName: string, rows: Array<Record<string, unknown>>, jobId: string): Promise<void> {
+    let processedCount = 0;
     try {
       if (rows.length === 0) {
         throw new Error('No data provided for insertion.');
@@ -51,15 +68,17 @@ export class DatabaseService {
       `;
 
         await this.query(insertQuery, values);
+        processedCount += batch.length;
       }
+
+      await this.insertPullJobHistory(jobId, rows.length, processedCount, null);
 
       this.loggerService.log(`Successfully inserted ${rows.length} row(s) into "${tableName}".`);
     } catch (error: unknown) {
-      if (error instanceof Error) {
-        this.loggerService.error(`Error inserting rows into table "${tableName}": ${error.message}`);
-      } else {
-        this.loggerService.error(`Unknown error inserting rows into table "${tableName}": ${JSON.stringify(error)}`);
-      }
+      const errorMsg = error instanceof Error ? error.message : JSON.stringify(error);
+
+      this.loggerService.error(`Error inserting rows into table "${tableName}": ${errorMsg}`);
+      await this.insertPullJobHistory(jobId, rows.length, processedCount, errorMsg);
     }
   }
 
@@ -82,7 +101,7 @@ export class DatabaseService {
         CREATE TABLE IF NOT EXISTS ${tableName} (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           data JSONB NOT NULL,
-          job_id TEXT NOT NULL,
+          jobId TEXT NOT NULL,
           created_at TIMESTAMP NOT NULL DEFAULT NOW()
         );
       `;
@@ -122,26 +141,26 @@ export class DatabaseService {
     }
   }
 
-  async updateTable(tableName: string, id: string, mode: IngestMode, data: unknown): Promise<void> {
+  async updateTable(tableName: string, jobId: string, mode: IngestMode, data: unknown): Promise<void> {
     await this.ensureTable(tableName);
     const arr = Array.isArray(data) ? data : Object.values(data as Record<string, unknown>).flat();
 
     const rows = arr.map((item) => ({
       id: v4(),
       data: JSON.stringify(item),
-      job_id: id,
+      jobId,
     }));
 
     if (mode === IngestMode.APPEND) {
-      await this.insertRows(tableName, rows);
+      await this.insertRows(tableName, rows, jobId);
     } else {
       const deleteQuery = `DELETE FROM ${tableName};`;
       await this.query(deleteQuery);
-      await this.insertRows(tableName, rows);
+      await this.insertRows(tableName, rows, jobId);
     }
   }
 
-  async updateTableWithMetaData(tableName: string, mode: IngestMode, data: Enrichment[]): Promise<void> {
+  async updateTableWithMetaData(tableName: string, jobId: string, mode: IngestMode, data: Enrichment[]): Promise<void> {
     await this.ensureTableWithMetaData(tableName);
 
     const rows = data.map((item) => ({
@@ -153,11 +172,11 @@ export class DatabaseService {
       checksum: item.checksum,
     }));
     if (mode === IngestMode.APPEND) {
-      await this.insertRows(tableName, rows);
+      await this.insertRows(tableName, rows, jobId);
     } else {
       const deleteQuery = `DELETE FROM ${tableName};`;
       await this.query(deleteQuery);
-      await this.insertRows(tableName, rows);
+      await this.insertRows(tableName, rows, jobId);
     }
   }
 }
