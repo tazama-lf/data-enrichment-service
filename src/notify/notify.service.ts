@@ -14,10 +14,14 @@ enum Status {
 @Injectable()
 export class NotifyService implements OnModuleInit, OnModuleDestroy {
   private readonly natsService: StartupFactory = new StartupFactory();
+  private readonly ingestionService: StartupFactory = new StartupFactory();
+  private readonly ackService: StartupFactory = new StartupFactory();
   private isInitialized = false;
   private readonly cacheTtl: number;
   private readonly consumerStream: string;
   private readonly producerStream: string;
+  private readonly ingestionProdStream: string;
+  private readonly ingestionConStream: string;
 
   constructor(
     private readonly logger: LoggerService,
@@ -29,6 +33,8 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
     this.cacheTtl = this.configService.get<number>('CACHE_TTL', 86400);
     this.consumerStream = this.configService.get<string>('CONSUMER_STREAM', 'config.notification');
     this.producerStream = this.configService.get<string>('PRODUCER_STREAM', 'config.notification.response');
+    this.ingestionConStream = this.configService.get<string>('INGESTION_CONSUMER_STREAM', 'ingestion.notification.response');
+    this.ingestionProdStream = this.configService.get<string>('INGESTION_PRODUCER_STREAM', 'ingestion.notification');
   }
 
   async onModuleInit(): Promise<void> {
@@ -45,7 +51,17 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
         this.producerStream,
       );
       this.isInitialized = true;
-      this.logger.log('NATS consumer initialized for config.notification');
+      this.logger.log(`NATS consumer initialized for ${this.consumerStream}`);
+
+      await this.ingestionService.initProducer(this.logger, this.ingestionProdStream);
+      this.logger.log('NATS producer initialized - sending to config.notification', 'NotificationController');
+
+      await this.ackService.init(
+        this.handleIngestionAckMessage.bind(this) as onMessageFunction,
+        this.logger,
+        [this.ingestionConStream],
+        'enrichment.ack.response',
+      );
 
       const query = `
   SELECT *
@@ -72,6 +88,32 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
   onModuleDestroy(): void {
     this.isInitialized = false;
     this.logger.log('ConfigNotifyService destroyed');
+  }
+
+  private async handleIngestionAckMessage(reqObj: unknown, handleResponse: (response: object) => Promise<void>): Promise<void> {
+    this.logger.log(`ACK from Data-Ingestion: ${JSON.stringify(reqObj)}`, 'NotificationController');
+
+    await handleResponse({
+      status: 'ACK_RECEIVED',
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  async notifyIngestion(id: string): Promise<void> {
+    try {
+      const payload = {
+        dataPayload: JSON.stringify({ id }),
+      };
+
+      await this.natsService.handleResponse(payload);
+
+      this.logger.log(`TESTING NOTIFY FROM ENRICHMENT TO INGESTION WITH ID ${id}`);
+    } catch (error) {
+      this.logger.error(
+        new Error(`Failed to process notification: ${error instanceof Error ? error.message : 'Unknown error'}`),
+        'NotificationController',
+      );
+    }
   }
 
   async handleNatsMessage(reqObj: unknown, handleResponse: (response: object) => Promise<void>): Promise<void> {
