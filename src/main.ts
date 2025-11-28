@@ -1,12 +1,12 @@
 import * as dotenv from 'dotenv';
+dotenv.config({ path: '.env' });
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { ApmInterceptor } from './apm/apm.interceptor';
 import { ApmService } from './apm/apm.service';
 import { ConfigService } from '@nestjs/config';
-import { json } from 'express';
-dotenv.config({ path: '.env' });
+import { json, } from 'express';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);

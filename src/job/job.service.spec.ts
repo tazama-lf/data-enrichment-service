@@ -7,6 +7,7 @@ import type { Request } from 'express';
 import { DatabaseService } from '../database/database.service';
 import type { CreateEnrichDataDto } from './dto/create-enrich-data.dto';
 import { JobService } from './job.service';
+import { NotifyService } from '../notify/notify.service';
 
 jest.mock('uuid', () => ({
   v4: jest.fn(() => 'test-correlation-id-123'),
@@ -22,6 +23,7 @@ describe('JobService', () => {
   let mockDatabaseService: jest.Mocked<DatabaseService>;
   let mockRedisService: jest.Mocked<RedisService>;
   let mockConfigService: jest.Mocked<ConfigService>;
+  let mockNotifyService: jest.Mocked<NotifyService>;
 
   const mockEndpoint = {
     id: 'endpoint-123',
@@ -58,6 +60,10 @@ describe('JobService', () => {
       get: jest.fn().mockReturnValue(86400),
     } as unknown as jest.Mocked<ConfigService>;
 
+    mockNotifyService = {
+      notifyIngestion: jest.fn(),
+    } as unknown as jest.Mocked<NotifyService>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         JobService,
@@ -65,6 +71,7 @@ describe('JobService', () => {
         { provide: RedisService, useValue: mockRedisService },
         { provide: ConfigService, useValue: mockConfigService },
         { provide: LoggerService, useValue: mockLoggerService },
+        { provide: NotifyService, useValue: mockNotifyService },
       ],
     }).compile();
 

@@ -9,7 +9,7 @@ import { JobModule } from '../job/job.module';
 import { NotifyController } from './notify.controller';
 
 @Module({
-  imports: [LoggerModule, ConfigModule, RedisModule, DatabaseModule, ExecutorModule, JobModule],
+  imports: [LoggerModule, ConfigModule, RedisModule, DatabaseModule, ExecutorModule],
   providers: [NotifyService],
   exports: [NotifyService],
   controllers: [NotifyController],

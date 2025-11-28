@@ -8,7 +8,7 @@ import { CreateEnrichDataDto } from './dto/create-enrich-data.dto';
 import { JobService } from './job.service';
 import { ISuccess } from '@tazama-lf/tcs-lib';
 
-@Controller('job')
+@Controller('')
 @UseGuards(TazamaAuthGuard)
 export class JobController {
   constructor(private readonly jobService: JobService) {}

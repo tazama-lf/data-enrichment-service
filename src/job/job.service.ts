@@ -8,6 +8,7 @@ import { v4 } from 'uuid';
 import { ApmSpan } from '../apm/apm.decorators';
 import { DatabaseService } from '../database/database.service';
 import { CreateEnrichDataDto } from './dto/create-enrich-data.dto';
+import { NotifyService } from '../notify/notify.service';
 
 @Injectable()
 export class JobService {
@@ -18,6 +19,7 @@ export class JobService {
     private readonly db: DatabaseService,
     private readonly configService: ConfigService,
     private readonly redis: RedisService,
+    private readonly notifyService: NotifyService
   ) {
     this.cacheTtl = this.configService.get<number>('CACHE_TTL', 86400);
   }
@@ -25,11 +27,6 @@ export class JobService {
   @ApmSpan('data-enrichment-push')
   async createEnrich({ req, body, tenantId }: { req: Request; body: CreateEnrichDataDto; tenantId: string }): Promise<ISuccess> {
     try {
-      const contentType = req.headers['content-type'];
-      if (!contentType?.includes('application/json')) {
-        throw new BadRequestException('Content-Type must be application/json');
-      }
-
       const { path } = req;
 
       const cachedEndpoint = await this.redis.getJson(path);
@@ -75,13 +72,11 @@ export class JobService {
         checksum: createHash('sha256').update(JSON.stringify(item)).digest('hex'),
       }));
 
-      await this.db.updateTableWithMetaData(
-        `${endpoint.tenant_id}_${endpoint.table_name}`,
-        endpoint.id,
-        endpoint.tenant_id,
-        endpoint.mode,
-        payload,
-      );
+      // payload.map(async (enriched) => {
+      //   await this.notifyService.notifyIngestion({ data: [enriched], endpoint })
+      // })
+
+      await this.notifyService.notifyIngestion({ data: payload, endpoint })
 
       return {
         message: 'Data Enriched Successfully',

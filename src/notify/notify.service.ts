@@ -99,15 +99,15 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  async notifyIngestion(id: string): Promise<void> {
+  async notifyIngestion(data: Record<string, unknown>): Promise<void> {
     try {
       const payload = {
-        dataPayload: JSON.stringify({ id }),
+        dataPayload: JSON.stringify(data),
       };
 
       await this.natsService.handleResponse(payload);
 
-      this.logger.log(`TESTING NOTIFY FROM ENRICHMENT TO INGESTION WITH ID ${id}`);
+      this.logger.log(`DATA SENT FROM ENRICHMENT TO INGESTION`);
     } catch (error) {
       this.logger.error(
         new Error(`Failed to process notification: ${error instanceof Error ? error.message : 'Unknown error'}`),
