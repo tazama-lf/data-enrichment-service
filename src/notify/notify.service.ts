@@ -97,8 +97,6 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
         SELECT 
           j.*, 
            s.cron,
-           s.start_date,
-           s.end_date
             FROM pull_jobs j
              LEFT JOIN cron_jobs s ON j.schedule_id = s.id
               WHERE j.id = $1
