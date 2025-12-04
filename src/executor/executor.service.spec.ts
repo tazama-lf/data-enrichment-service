@@ -39,21 +39,20 @@ describe('ExecutorService', () => {
     table_name: 'test_table',
     schedule_id: 'schedule-789',
     source_type: SourceType.HTTP,
-    mode: IngestMode.APPEND,
+    mode: IngestMode.REPLACE,
     cron: '0 0 * * *',
     iterations: 3,
     connection: {
       url: 'https://api.example.com/data',
       headers: { Authorization: 'Bearer token' },
     },
-    start_date: new Date(),
     status: JobStatus.DEPLOYED,
     endpoint_name: 'test-endpoint',
     description: 'Test job',
     version: '1.0.0',
     publishing_status: ScheduleStatus.ACTIVE,
     created_at: new Date(),
-    type: 'push',
+    type: 'pull',
   };
 
   beforeEach(async () => {
