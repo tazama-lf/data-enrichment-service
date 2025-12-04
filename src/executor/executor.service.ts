@@ -203,7 +203,7 @@ export class ExecutorService {
       timeZone,
     );
 
-    this.schedulerRegistry.addCronJob(jobKey, cronJob);
+    this.schedulerRegistry.addCronJob(jobKey, cronJob as any);
     cronJob.start();
     this.loggerService.log(`Cron Job Scheduled with key ${jobKey}`);
   }

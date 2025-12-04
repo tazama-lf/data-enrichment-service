@@ -39,7 +39,6 @@ describe('ExecutorService', () => {
     table_name: 'test_table',
     schedule_id: 'schedule-789',
     source_type: SourceType.HTTP,
-    mode: IngestMode.REPLACE,
     cron: '0 0 * * *',
     iterations: 3,
     connection: {
@@ -47,6 +46,7 @@ describe('ExecutorService', () => {
       headers: { Authorization: 'Bearer token' },
     },
     status: JobStatus.DEPLOYED,
+    mode: IngestMode.APPEND,
     endpoint_name: 'test-endpoint',
     description: 'Test job',
     version: '1.0.0',
@@ -163,10 +163,10 @@ describe('ExecutorService', () => {
   describe('deleteCronJob', () => {
     it('should delete existing cron job', async () => {
       const mockExistingJob = {
-        stop: jest.fn().mockResolvedValue(undefined),
+        stop: jest.fn(),
       };
       mockSchedulerRegistry.getCronJobs.mockReturnValue(
-        new Map([['job-job-123-schedule-schedule-789', mockExistingJob as unknown as CronJob]]),
+        new Map([['job-job-123-schedule-schedule-789', mockExistingJob as any]]),
       );
 
       await service.deleteCronJob('job-123', 'schedule-789');
@@ -644,9 +644,9 @@ describe('ExecutorService', () => {
     it('should stop and delete job when iterations limit reached', async () => {
       mockRedisService.getJson.mockResolvedValue('2');
       const mockCronJob = {
-        stop: jest.fn().mockResolvedValue(undefined),
+        stop: jest.fn(),
       };
-      mockSchedulerRegistry.getCronJob.mockReturnValue(mockCronJob as unknown as CronJob);
+      mockSchedulerRegistry.getCronJob.mockReturnValue(mockCronJob as any);
 
       await service.handleFailure(mockJob, 'job-key');
 
