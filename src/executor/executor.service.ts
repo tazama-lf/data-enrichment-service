@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
-import { AuthType, FileSettings, FileType, HTTPConnection, Job, SFTPConnection, SourceType } from '@tazama-lf/tcs-lib';
+import { AuthType, ConfigType, FileSettings, FileType, HTTPConnection, Job, SFTPConnection, SourceType } from '@tazama-lf/tcs-lib';
 import { CronJob } from 'cron';
 import { parse } from 'csv-parse/sync';
 import * as iconv from 'iconv-lite';
@@ -63,7 +63,7 @@ export class ExecutorService {
     const { data, status } = await firstValueFrom(this.httpService.get<unknown>(httpCon.url, { headers: httpCon.headers }));
 
     if (status === 200 && typeof data === 'object') {
-      await this.db.updateTable(`${job.tenant_id}_${job.table_name}`, job.id, job.mode, data, job.tenant_id);
+      await this.db.updateTable(`${job.tenant_id}_${job.table_name}`, job.id, data, job.tenant_id, ConfigType.PULL);
       await this.redis.set(jobKey, 0, this.cacheTtl);
     } else {
       await this.handleFailure(job, jobKey);
@@ -111,7 +111,7 @@ export class ExecutorService {
       if (!fileExists) throw new Error(`File ${file.path} not found on SFTP server`);
 
       const records = await this.transformFileToJSON(sftp, file);
-      await this.db.updateTable(`${job.tenant_id}_${job.table_name}`, job.id, job.mode, records, job.tenant_id);
+      await this.db.updateTable(`${job.tenant_id}_${job.table_name}`, job.id, records, job.tenant_id, ConfigType.PULL);
 
       await this.redis.set(jobKey, 0, this.cacheTtl);
     } catch (error: unknown) {

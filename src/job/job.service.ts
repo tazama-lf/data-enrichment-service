@@ -1,10 +1,9 @@
 import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
-import { Enrichment, ISuccess, JobStatus, PushJob, ScheduleStatus } from '@tazama-lf/tcs-lib';
-import { createHash } from 'node:crypto';
+import { ConfigType, Enrichment, ISuccess, JobStatus, PushJob, ScheduleStatus } from '@tazama-lf/tcs-lib';
 import { Request } from 'express';
-import { v4 } from 'uuid';
+import { createHash } from 'node:crypto';
 import { ApmSpan } from '../apm/apm.decorators';
 import { DatabaseService } from '../database/database.service';
 import { CreateEnrichDataDto } from './dto/create-enrich-data.dto';
@@ -65,23 +64,14 @@ export class JobService {
         throw new BadRequestException('Endpoint not deployed or not active.');
       }
 
-      const correlationId = v4();
       const items = Array.isArray(body.data) ? body.data : [body.data];
       const payload: Enrichment[] = items.map((item) => ({
-        tenant_id: tenantId,
-        correlation_id: correlationId,
         data: item,
-        endpoint_id: endpoint.id,
+        job_id: endpoint.id,
         checksum: createHash('sha256').update(JSON.stringify(item)).digest('hex'),
       }));
 
-      await this.db.updateTableWithMetaData(
-        `${endpoint.tenant_id}_${endpoint.table_name}`,
-        endpoint.id,
-        endpoint.tenant_id,
-        endpoint.mode,
-        payload,
-      );
+      await this.db.updateTable(`${endpoint.tenant_id}_${endpoint.table_name}`, endpoint.id, payload, endpoint.tenant_id, ConfigType.PUSH);
 
       return {
         message: 'Data Enriched Successfully',

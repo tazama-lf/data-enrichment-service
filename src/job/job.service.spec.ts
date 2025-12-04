@@ -2,7 +2,7 @@ import { BadRequestException, InternalServerErrorException, NotFoundException } 
 import { ConfigService } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
-import { IngestMode, JobStatus, ScheduleStatus } from '@tazama-lf/tcs-lib';
+import { ConfigType, JobStatus, ScheduleStatus } from '@tazama-lf/tcs-lib';
 import type { Request } from 'express';
 import { DatabaseService } from '../database/database.service';
 import type { CreateEnrichDataDto } from './dto/create-enrich-data.dto';
@@ -28,7 +28,6 @@ describe('JobService', () => {
     tenant_id: 'tenant_456',
     path: '/tcs/test-endpoint',
     table_name: 'test_table',
-    mode: IngestMode.APPEND,
     status: JobStatus.DEPLOYED,
     publishing_status: ScheduleStatus.ACTIVE,
   };
@@ -43,7 +42,7 @@ describe('JobService', () => {
 
     mockDatabaseService = {
       query: jest.fn(),
-      updateTableWithMetaData: jest.fn().mockResolvedValue(undefined),
+      updateTable: jest.fn().mockResolvedValue(undefined),
       ensureTable: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<DatabaseService>;
 
@@ -104,20 +103,18 @@ describe('JobService', () => {
 
         expect(mockRedisService.getJson).toHaveBeenCalledWith('/tcs/test-endpoint');
         expect(mockLoggerService.log).toHaveBeenCalledWith('Using endpoint from cache: /tcs/test-endpoint');
-        expect(mockDatabaseService.updateTableWithMetaData).toHaveBeenCalledWith(
+        expect(mockDatabaseService.updateTable).toHaveBeenCalledWith(
           'tenant_456_test_table',
           'endpoint-123',
-          'tenant_456',
-          IngestMode.APPEND,
           expect.arrayContaining([
             expect.objectContaining({
-              tenant_id: 'tenant_456',
-              correlation_id: 'test-correlation-id-123',
               data: { key: 'value', name: 'test' },
-              endpoint_id: 'endpoint-123',
+              job_id: 'endpoint-123',
               checksum: expect.stringMatching(/^[a-f0-9]{64}$/),
             }),
           ]),
+          'tenant_456',
+          ConfigType.PUSH,
         );
         expect(result).toEqual({
           message: 'Data Enriched Successfully',
@@ -154,16 +151,16 @@ describe('JobService', () => {
 
         const result = await service.createEnrich({ req: mockRequest as Request, body: arrayBody, tenantId: 'tenant_456' });
 
-        expect(mockDatabaseService.updateTableWithMetaData).toHaveBeenCalledWith(
+        expect(mockDatabaseService.updateTable).toHaveBeenCalledWith(
           'tenant_456_test_table',
           'endpoint-123',
-          'tenant_456',
-          IngestMode.APPEND,
           expect.arrayContaining([
             expect.objectContaining({ data: { id: 1 } }),
             expect.objectContaining({ data: { id: 2 } }),
             expect.objectContaining({ data: { id: 3 } }),
           ]),
+          'tenant_456',
+          ConfigType.PUSH,
         );
         expect(result.success).toBe(true);
       });
@@ -176,7 +173,7 @@ describe('JobService', () => {
 
         await service.createEnrich({ req: mockRequest as Request, body: arrayBody, tenantId: 'tenant_456' });
 
-        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][4] as Array<{
+        const callArgs = mockDatabaseService.updateTable.mock.calls[0][2] as Array<{
           checksum: string;
           data: Record<string, unknown>;
         }>;
@@ -185,43 +182,28 @@ describe('JobService', () => {
         expect(callArgs[1].checksum).toMatch(/^[a-f0-9]{64}$/);
       });
 
-      it('should use correlation_id from uuid', async () => {
+      it('should pass endpoint.id as job_id parameter', async () => {
         mockRedisService.getJson.mockResolvedValue(JSON.stringify(mockEndpoint));
 
         await service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
 
-        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][4] as Array<{
-          correlation_id: string;
+        const callArgs = mockDatabaseService.updateTable.mock.calls[0][2] as Array<{
+          job_id: string;
         }>;
-        expect(callArgs[0].correlation_id).toBe('test-correlation-id-123');
+        expect(callArgs[0].job_id).toBe('endpoint-123');
       });
 
-      it('should use correct IngestMode from endpoint', async () => {
-        const replaceEndpoint = { ...mockEndpoint, mode: IngestMode.REPLACE };
-        mockRedisService.getJson.mockResolvedValue(JSON.stringify(replaceEndpoint));
-
-        await service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
-
-        expect(mockDatabaseService.updateTableWithMetaData).toHaveBeenCalledWith(
-          'tenant_456_test_table',
-          'endpoint-123',
-          'tenant_456',
-          IngestMode.REPLACE,
-          expect.any(Array),
-        );
-      });
-
-      it('should pass endpoint.id as jobId parameter', async () => {
+      it('should pass ConfigType.PUSH as type parameter', async () => {
         mockRedisService.getJson.mockResolvedValue(JSON.stringify(mockEndpoint));
 
         await service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
 
-        expect(mockDatabaseService.updateTableWithMetaData).toHaveBeenCalledWith(
+        expect(mockDatabaseService.updateTable).toHaveBeenCalledWith(
           'tenant_456_test_table',
           'endpoint-123',
-          'tenant_456',
-          IngestMode.APPEND,
           expect.any(Array),
+          'tenant_456',
+          ConfigType.PUSH,
         );
       });
     });
@@ -357,9 +339,9 @@ describe('JobService', () => {
         expect(mockLoggerService.error).toHaveBeenCalledWith(expect.stringContaining('Error in createEnrich'));
       });
 
-      it('should throw InternalServerErrorException when updateTableWithMetaData fails', async () => {
+      it('should throw InternalServerErrorException when updateTable fails', async () => {
         mockRedisService.getJson.mockResolvedValue(JSON.stringify(mockEndpoint));
-        mockDatabaseService.updateTableWithMetaData.mockRejectedValue(new Error('Insert failed'));
+        mockDatabaseService.updateTable.mockRejectedValue(new Error('Insert failed'));
 
         await expect(service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' })).rejects.toThrow(
           new InternalServerErrorException('An unexpected error occurred while enriching data.'),
@@ -434,7 +416,7 @@ describe('JobService', () => {
         const result = await service.createEnrich({ req: mockRequest as Request, body: complexBody, tenantId: 'tenant_456' });
 
         expect(result.success).toBe(true);
-        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][4] as Array<{
+        const callArgs = mockDatabaseService.updateTable.mock.calls[0][2] as Array<{
           data: Record<string, unknown>;
         }>;
         expect(callArgs[0].data).toEqual(complexBody.data);
@@ -454,7 +436,7 @@ describe('JobService', () => {
 
         await service.createEnrich({ req: mockRequest as Request, body: typedBody, tenantId: 'tenant_456' });
 
-        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][4] as Array<{
+        const callArgs = mockDatabaseService.updateTable.mock.calls[0][2] as Array<{
           data: Record<string, unknown>;
         }>;
         expect(callArgs[0].data).toEqual(typedBody.data);
@@ -469,7 +451,7 @@ describe('JobService', () => {
         const result = await service.createEnrich({ req: mockRequest as Request, body: emptyBody, tenantId: 'tenant_456' });
 
         expect(result.success).toBe(true);
-        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][4] as Array<{
+        const callArgs = mockDatabaseService.updateTable.mock.calls[0][2] as Array<{
           data: Record<string, unknown>;
         }>;
         expect(callArgs[0].data).toEqual({});
@@ -484,12 +466,12 @@ describe('JobService', () => {
         const result = await service.createEnrich({ req: mockRequest as Request, body: emptyArrayBody, tenantId: 'tenant_456' });
 
         expect(result.success).toBe(true);
-        expect(mockDatabaseService.updateTableWithMetaData).toHaveBeenCalledWith(
+        expect(mockDatabaseService.updateTable).toHaveBeenCalledWith(
           'tenant_456_test_table',
           'endpoint-123',
-          'tenant_456',
-          IngestMode.APPEND,
           [],
+          'tenant_456',
+          ConfigType.PUSH,
         );
       });
 
@@ -503,7 +485,7 @@ describe('JobService', () => {
         const result = await service.createEnrich({ req: mockRequest as Request, body: largeBody, tenantId: 'tenant_456' });
 
         expect(result.success).toBe(true);
-        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][4] as Array<{
+        const callArgs = mockDatabaseService.updateTable.mock.calls[0][2] as Array<{
           data: Record<string, unknown>;
         }>;
         expect(callArgs).toHaveLength(1000);
@@ -518,7 +500,7 @@ describe('JobService', () => {
 
         await service.createEnrich({ req: mockRequest as Request, body: arrayBody, tenantId: 'tenant_456' });
 
-        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][4] as Array<{
+        const callArgs = mockDatabaseService.updateTable.mock.calls[0][2] as Array<{
           checksum: string;
         }>;
         expect(callArgs[0].checksum).toBe(callArgs[1].checksum);
@@ -535,7 +517,7 @@ describe('JobService', () => {
 
         await service.createEnrich({ req: mockRequest as Request, body: arrayBody, tenantId: 'tenant_456' });
 
-        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][4] as Array<{
+        const callArgs = mockDatabaseService.updateTable.mock.calls[0][2] as Array<{
           checksum: string;
         }>;
         expect(callArgs[0].checksum).toBeDefined();
@@ -589,12 +571,12 @@ describe('JobService', () => {
 
         await service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
 
-        expect(mockDatabaseService.updateTableWithMetaData).toHaveBeenCalledWith(
+        expect(mockDatabaseService.updateTable).toHaveBeenCalledWith(
           'tenant_456_test_table',
           'endpoint-123',
-          'tenant_456',
-          IngestMode.APPEND,
           expect.any(Array),
+          'tenant_456',
+          ConfigType.PUSH,
         );
       });
 
@@ -604,12 +586,12 @@ describe('JobService', () => {
 
         await service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'endpoint_tenant' });
 
-        expect(mockDatabaseService.updateTableWithMetaData).toHaveBeenCalledWith(
+        expect(mockDatabaseService.updateTable).toHaveBeenCalledWith(
           'endpoint_tenant_test_table',
           'endpoint-123',
-          'endpoint_tenant',
-          IngestMode.APPEND,
           expect.any(Array),
+          'endpoint_tenant',
+          ConfigType.PUSH,
         );
       });
 
@@ -619,12 +601,12 @@ describe('JobService', () => {
 
         await service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
 
-        expect(mockDatabaseService.updateTableWithMetaData).toHaveBeenCalledWith(
+        expect(mockDatabaseService.updateTable).toHaveBeenCalledWith(
           'tenant_456_test_table_2024',
           'endpoint-123',
-          'tenant_456',
-          IngestMode.APPEND,
           expect.any(Array),
+          'tenant_456',
+          ConfigType.PUSH,
         );
       });
     });
@@ -665,35 +647,6 @@ describe('JobService', () => {
         await service.createEnrich({ req: { ...mockRequest, path: customPath } as Request, body: mockBody, tenantId: 'tenant_456' });
 
         expect(mockRedisService.getJson).toHaveBeenCalledWith(customPath);
-      });
-    });
-
-    describe('Correlation ID', () => {
-      it('should use same correlation_id for all items in array', async () => {
-        mockRedisService.getJson.mockResolvedValue(JSON.stringify(mockEndpoint));
-        const arrayBody: CreateEnrichDataDto = {
-          data: [{ id: 1 }, { id: 2 }, { id: 3 }],
-        };
-
-        await service.createEnrich({ req: mockRequest as Request, body: arrayBody, tenantId: 'tenant_456' });
-
-        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][4] as Array<{
-          correlation_id: string;
-        }>;
-        expect(callArgs[0].correlation_id).toBe('test-correlation-id-123');
-        expect(callArgs[1].correlation_id).toBe('test-correlation-id-123');
-        expect(callArgs[2].correlation_id).toBe('test-correlation-id-123');
-      });
-
-      it('should use same correlation_id for single data item', async () => {
-        mockRedisService.getJson.mockResolvedValue(JSON.stringify(mockEndpoint));
-
-        await service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
-
-        const callArgs = mockDatabaseService.updateTableWithMetaData.mock.calls[0][4] as Array<{
-          correlation_id: string;
-        }>;
-        expect(callArgs[0].correlation_id).toBe('test-correlation-id-123');
       });
     });
 

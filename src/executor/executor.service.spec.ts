@@ -2,7 +2,7 @@ import { HttpService } from '@nestjs/axios';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
-import { AuthType, FileType, IngestMode, type Job, JobStatus, ScheduleStatus, SourceType } from '@tazama-lf/tcs-lib';
+import { AuthType, ConfigType, FileType, IngestMode, type Job, JobStatus, ScheduleStatus, SourceType } from '@tazama-lf/tcs-lib';
 import { CronJob } from 'cron';
 import { DatabaseService } from '../database/database.service';
 import { ExecutorService } from './executor.service';
@@ -208,9 +208,9 @@ describe('ExecutorService', () => {
       expect(mockDatabaseService.updateTable).toHaveBeenCalledWith(
         'tenant-456_test_table',
         'job-123',
-        IngestMode.APPEND,
         { key: 'value' },
         'tenant-456',
+        ConfigType.PULL,
       );
       expect(mockRedisService.set).toHaveBeenCalledWith('job-key', 0, 86400);
     });
@@ -232,9 +232,9 @@ describe('ExecutorService', () => {
       expect(mockDatabaseService.updateTable).toHaveBeenCalledWith(
         'tenant-456_test_table',
         'job-123',
-        IngestMode.APPEND,
         [{ id: 1 }, { id: 2 }],
         'tenant-456',
+        ConfigType.PULL,
       );
     });
 
@@ -312,13 +312,7 @@ describe('ExecutorService', () => {
 
       await service.handleHttpJob(httpJob, 'job-key');
 
-      expect(mockDatabaseService.updateTable).toHaveBeenCalledWith(
-        'tenant-456_test_table',
-        'job-123',
-        IngestMode.APPEND,
-        null,
-        'tenant-456',
-      );
+      expect(mockDatabaseService.updateTable).toHaveBeenCalledWith('tenant-456_test_table', 'job-123', null, 'tenant-456', ConfigType.PULL);
     });
   });
 
@@ -422,9 +416,9 @@ describe('ExecutorService', () => {
       expect(mockDatabaseService.updateTable).toHaveBeenCalledWith(
         'tenant-456_test_table',
         'job-123',
-        IngestMode.APPEND,
         [{ key: 'value' }],
         'tenant-456',
+        ConfigType.PULL,
       );
       expect(mockRedisService.set).toHaveBeenCalledWith('job-key', 0, 86400);
       expect(mockSftpClient.end).toHaveBeenCalled();
