@@ -4,15 +4,15 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
 import { ConfigType, JobStatus, ScheduleStatus } from '@tazama-lf/tcs-lib';
 import type { Request } from 'express';
-import { DatabaseService } from '../database/database.service';
-import type { CreateEnrichDataDto } from './dto/create-enrich-data.dto';
-import { JobService } from './job.service';
+import { DatabaseService } from '../../src/database/database.service';
+import type { CreateEnrichDataDto } from '../../src/job/dto/create-enrich-data.dto';
+import { JobService } from '../../src/job/job.service';
 
 jest.mock('uuid', () => ({
   v4: jest.fn(() => 'test-correlation-id-123'),
 }));
 
-jest.mock('../apm/apm.decorators', () => ({
+jest.mock('../../src/apm/apm.decorators', () => ({
   ApmSpan: () => (target: unknown, propertyKey: string, descriptor: PropertyDescriptor) => descriptor,
 }));
 

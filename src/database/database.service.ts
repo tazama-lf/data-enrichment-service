@@ -38,10 +38,10 @@ export class DatabaseService {
 
     try {
       await this.query(query, params);
-      this.loggerService.log(`Inserted pull job history for jobId: ${jobId}`);
+      this.loggerService.log(`Inserted job history for jobId: ${jobId}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : JSON.stringify(error);
-      this.loggerService.error(`Failed to insert pull_job_history: ${message}`);
+      this.loggerService.error(`Failed to insert job_history: ${message}`);
       throw Error(message);
     }
   }

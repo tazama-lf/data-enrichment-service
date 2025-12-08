@@ -1,5 +1,5 @@
 import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
-import { Request } from 'express';
+import type { Request } from 'express';
 import { RequireEditorRole } from '../auth/auth.decorator';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { TazamaAuthGuard } from '../auth/tazama-auth.guard';

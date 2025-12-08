@@ -4,19 +4,19 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
 import { AuthType, ConfigType, FileType, IngestMode, type Job, JobStatus, ScheduleStatus, SourceType } from '@tazama-lf/tcs-lib';
 import { CronJob } from 'cron';
-import { DatabaseService } from '../database/database.service';
-import { ExecutorService } from './executor.service';
+import { DatabaseService } from '../../src/database/database.service';
+import { ExecutorService } from '../../src/executor/executor.service';
 import { of, throwError } from 'rxjs';
 import SFTPClient from 'ssh2-sftp-client';
 import { ConfigService } from '@nestjs/config';
 
-jest.mock('../apm/apm.decorators', () => ({
+jest.mock('../../src/apm/apm.decorators', () => ({
   ApmSpan: () => (target: unknown, propertyKey: string, descriptor: PropertyDescriptor) => descriptor,
 }));
 
 jest.mock('ssh2-sftp-client');
 
-jest.mock('../utils/helpers', () => ({
+jest.mock('../../src/utils/helpers', () => ({
   decrypt: jest.fn((value: string) => value.replace('encrypted:', '')),
   isValidText: jest.fn(() => true),
   getJobKey: jest.fn((jobId: string, scheduleId: string) => `job-${jobId}-schedule-${scheduleId}`),
@@ -45,8 +45,8 @@ describe('ExecutorService', () => {
       url: 'https://api.example.com/data',
       headers: { Authorization: 'Bearer token' },
     },
-    status: JobStatus.DEPLOYED,
     mode: IngestMode.APPEND,
+    status: JobStatus.DEPLOYED,
     endpoint_name: 'test-endpoint',
     description: 'Test job',
     version: '1.0.0',
@@ -163,10 +163,10 @@ describe('ExecutorService', () => {
   describe('deleteCronJob', () => {
     it('should delete existing cron job', async () => {
       const mockExistingJob = {
-        stop: jest.fn(),
+        stop: jest.fn().mockResolvedValue(undefined),
       };
       mockSchedulerRegistry.getCronJobs.mockReturnValue(
-        new Map([['job-job-123-schedule-schedule-789', mockExistingJob as any]]),
+        new Map([['job-job-123-schedule-schedule-789', mockExistingJob as unknown as CronJob]]),
       );
 
       await service.deleteCronJob('job-123', 'schedule-789');
@@ -644,9 +644,9 @@ describe('ExecutorService', () => {
     it('should stop and delete job when iterations limit reached', async () => {
       mockRedisService.getJson.mockResolvedValue('2');
       const mockCronJob = {
-        stop: jest.fn(),
+        stop: jest.fn().mockResolvedValue(undefined),
       };
-      mockSchedulerRegistry.getCronJob.mockReturnValue(mockCronJob as any);
+      mockSchedulerRegistry.getCronJob.mockReturnValue(mockCronJob as unknown as CronJob);
 
       await service.handleFailure(mockJob, 'job-key');
 

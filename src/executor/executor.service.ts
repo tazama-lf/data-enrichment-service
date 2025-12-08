@@ -3,7 +3,16 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
-import { AuthType, ConfigType, FileSettings, FileType, HTTPConnection, Job, SFTPConnection, SourceType } from '@tazama-lf/tcs-lib';
+import {
+  AuthType,
+  ConfigType,
+  type FileSettings,
+  FileType,
+  HTTPConnection,
+  type Job,
+  type SFTPConnection,
+  SourceType,
+} from '@tazama-lf/tcs-lib';
 import { CronJob } from 'cron';
 import { parse } from 'csv-parse/sync';
 import * as iconv from 'iconv-lite';
@@ -193,7 +202,7 @@ export class ExecutorService {
 
     await this.redis.set(jobKey, 0, this.cacheTtl);
 
-    const cronJob = new CronJob(
+    const cronJob: CronJob = new CronJob(
       job.cron!,
       async () => {
         await this.run(job, jobKey);
@@ -203,7 +212,7 @@ export class ExecutorService {
       timeZone,
     );
 
-    this.schedulerRegistry.addCronJob(jobKey, cronJob as any);
+    this.schedulerRegistry.addCronJob(jobKey, cronJob);
     cronJob.start();
     this.loggerService.log(`Cron Job Scheduled with key ${jobKey}`);
   }

@@ -4,6 +4,7 @@
     "emitDeclarationOnly": false,
     "importHelpers": true,
     "target": "ES2022",
+    "isolatedModules": true,
     "module": "NodeNext",
     "lib": [
       "ES2022"
@@ -24,8 +25,9 @@
     "useDefineForClassFields": false
   },
   "include": [
-    "src/**/*"
-  ],
+    "src/**/*",
+    "test/job/job.service.spec.ts"
+, "test/executor/executor.service.spec.ts", "test/database/database.service.spec.ts"  ],
   "exclude": [
     "node_modules",
     "dist"
