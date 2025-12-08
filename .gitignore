@@ -11,6 +11,5 @@ yarn-error.log
 .env
 .env.*.local
 
-/src/generated/prisma
-
-/src/generated/prisma
+coverage
+*.lcov
