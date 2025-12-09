@@ -14,19 +14,16 @@ export class TazamaAuthGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
-    // Get required claims from decorator
     const requiredClaims = this.reflector.getAllAndOverride<string[]>(CLAIMS_KEY, [context.getHandler(), context.getClass()]);
 
     const request: RequestWithUser = context.switchToHttp().getRequest<RequestWithUser>();
     const authHeader: string | undefined = request.headers.authorization;
 
-    // Validate authorization header
     if (!authHeader?.startsWith('Bearer ')) {
       this.logger.warn('No Bearer token provided', this.LOG_CONTEXT);
       throw new UnauthorizedException('No Bearer token provided');
     }
 
-    // Check if we have either type of claims requirement
     if (requiredClaims.length === 0) {
       this.logger.warn('No required claims specified for protected route', this.LOG_CONTEXT);
       throw new UnauthorizedException('No required claims specified');
@@ -40,10 +37,9 @@ export class TazamaAuthGuard implements CanActivate {
       }
 
       const [, token] = tokenParts;
-      // Determine which claims to validate
+
       const claimsToValidate = requiredClaims;
 
-      // Validate token and claims using tazama-auth-lib
       const validated: ClaimValidationResult = validateTokenAndClaims(token, claimsToValidate);
 
       let hasValidAccess = false;
@@ -51,7 +47,6 @@ export class TazamaAuthGuard implements CanActivate {
       let invalidClaims: string[] = [];
 
       if (requiredClaims.length > 0) {
-        // ALL required claims must be present
         const hasAllClaims = requiredClaims.every((claim) => validated[claim]);
         validClaims = requiredClaims.filter((claim) => validated[claim]);
         invalidClaims = requiredClaims.filter((claim) => !validated[claim]);
@@ -69,17 +64,14 @@ export class TazamaAuthGuard implements CanActivate {
         throw new UnauthorizedException(`Missing or invalid claims: ${invalidClaims.join(', ')}`);
       }
 
-      // Extract token payload (you might need to decode the JWT to get the full TazamaToken)
       const decodedToken = this.extractTokenPayload(token);
 
-      // Create authenticated user object
       const authenticatedUser: AuthenticatedUser = {
         token: decodedToken,
         validated,
         validClaims,
       };
 
-      // Attach user to request for use in controllers
       request.user = authenticatedUser;
 
       this.logger.log(
@@ -106,7 +98,7 @@ export class TazamaAuthGuard implements CanActivate {
       if (!decoded) {
         throw new Error('Failed to decode token');
       }
-      // Validate required TazamaToken fields
+
       if (!decoded.clientId) {
         throw new Error('Token missing clientId');
       }
