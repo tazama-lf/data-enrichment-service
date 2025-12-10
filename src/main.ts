@@ -16,7 +16,7 @@ async function bootstrap(): Promise<void> {
   // Initialize APM interceptor for global transaction monitoring
   const apmService = app.get(ApmService);
   app.useGlobalInterceptors(new ApmInterceptor(apmService));
-  app.use(json({ limit: configService.get<string>('size', '100mb') }));
+  app.use(json({ limit: configService.get<string>('SIZE', '100mb') }));
   app.enableCors({
     origin: true,
     credentials: true,

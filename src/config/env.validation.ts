@@ -27,7 +27,7 @@ export class EnvironmentVariables {
   SALT_ROUNDS!: number;
 
   @IsString()
-  size!: string;
+  SIZE!: string;
 
   @IsNumber()
   CACHE_TTL!: number;
