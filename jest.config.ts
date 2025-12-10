@@ -24,7 +24,16 @@ const config: Config.InitialOptions = {
   coverageDirectory: '<rootDir>/coverage',
   coverageProvider: 'v8',
 
-  coveragePathIgnorePatterns: ['/node_modules/', '<rootDir>/test/', '.mock.ts', '.module.ts', '.*utils.*', '.*validators.*', '.*dto.*'],
+  coveragePathIgnorePatterns: [
+    '/node_modules/',
+    '<rootDir>/test/',
+    '.mock.ts',
+    '.module.ts',
+    '.*utils.*',
+    '.*validators.*',
+    '.*dto.*',
+    '/apm/',
+  ],
 
   verbose: true,
 };
