@@ -75,14 +75,23 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
   }
 
   async handleNatsMessage(reqObj: unknown, handleResponse: (response: object) => Promise<void>): Promise<void> {
-    const { dataPayload } = reqObj as { dataPayload: string };
+    let payload: { endpointId: string; configType: ConfigType } | null = null;
 
-    const payload = JSON.parse(dataPayload) as {
-      endpointId: string;
-      configType: ConfigType;
-    };
-    this.logger.log(`RECEIVING MESSAGE ${JSON.stringify(payload)}`);
+    try {
+      const { dataPayload } = reqObj as { dataPayload: string };
+      payload = JSON.parse(dataPayload) as { endpointId: string; configType: ConfigType };
+      this.logger.log(`RECEIVING MESSAGE ${JSON.stringify(payload)}`);
+    } catch (jsonError: unknown) {
+      const message = jsonError instanceof Error ? jsonError.message : String(jsonError);
+      this.logger.error(`Error processing message: ${message}`);
 
+      await handleResponse({
+        status: Status.NACK,
+        error: message,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
     const { endpointId, configType } = payload;
     try {
       const query =
