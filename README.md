@@ -43,46 +43,69 @@ npm run start:dev
 
 The service will be available at `http://localhost:3001`
 
-#### Project Variables
+## Configuration
 
-| Variable    | Purpose                 | Example       |
-| ----------- | ----------------------- | ------------- |
-| `APP_PORT`  | Port to serve on        | `3001`        |
-| `NODE_ENV`  | Application environment | `development` |
-| `LOG_LEVEL` | Logging verbosity       | `info`        |
+### Application Variables
 
-#### Database Variables
+| Variable         | Purpose                                | Default | Example                  | Required |
+| ---------------- | -------------------------------------- | ------- | ------------------------ | -------- |
+| `FUNCTION_NAME`  | Service identifier                     | -       | `data-enrichment`        | Yes      |
+| `NODE_ENV`       | Application environment                | `dev`   | `dev`, `prod`, `test`    | Yes      |
+| `MAX_CPU`        | Maximum CPU cores to use               | `1`     | `1`, `2`, `4`            | Yes      |
+| `SIZE`           | Maximum request body size              | `100mb` | `150mb`                  | Yes      |
+| `SALT_ROUNDS`    | Password hashing rounds                | `9`     | `10`, `12`               | Yes      |
+| `ENCRYPTION_KEY` | AES encryption key for sensitive data  | -       | `32-character-hex-key`   | Yes      |
 
-| Variable            | Purpose           | Example     |
-| ------------------- | ----------------- | ----------- |
-| `DATABASE_HOST`     | PostgreSQL host   | `localhost` |
-| `DATABASE_PORT`     | PostgreSQL port   | `5432`      |
-| `DATABASE_NAME`     | Database name     | `tcs`       |
-| `DATABASE_USER`     | Database user     | `postgres`  |
-| `DATABASE_PASSWORD` | Database password | `postgres`  |
+### Database Variables
 
-#### Cache Variables
+| Variable                      | Purpose                          | Example                                                  | Required |
+| ----------------------------- | -------------------------------- | -------------------------------------------------------- | -------- |
+| `CONFIGURATION_DATABASE_URL`  | PostgreSQL connection string     | `postgresql://postgres:password@localhost:5432/database` | Yes      |
 
-| Variable         | Purpose                       | Example          |
-| ---------------- | ----------------------------- | ---------------- |
-| `REDIS_HOST`     | Redis host                    | `localhost`      |
-| `REDIS_PORT`     | Redis port                    | `6379`           |
-| `REDIS_PASSWORD` | Redis password                | `redis-password` |
-| `CACHE_TTL`      | Cache time-to-live in seconds | `3600`           |
+**Note:** The connection string format is `postgresql://[user[:password]@][host][:port][/database]`
 
-#### Messaging Variables
+### Redis Cache Variables
 
-| Variable              | Purpose             | Example                 |
-| --------------------- | ------------------- | ----------------------- |
-| `NATS_URL`            | NATS server URL     | `nats://localhost:4222` |
-| `NATS_CONSUMER_GROUP` | Consumer group name | `dems-consumer`         |
+| Variable         | Purpose                       | Default | Example          | Required |
+| ---------------- | ----------------------------- | ------- | ---------------- | -------- |
+| `REDIS_HOST`     | Redis server hostname         | -       | `localhost`      | Yes      |
+| `REDIS_PORT`     | Redis server port             | `6379`  | `6379`           | Yes      |
+| `REDIS_PASSWORD` | Redis authentication password | -       | `redis-password` | Yes      |
+| `CACHE_TTL`      | Cache time-to-live (seconds)  | `3600`  | `86400`          | Yes      |
 
-#### Authentication Variables
+### NATS Messaging Variables
 
-| Variable           | Purpose               | Example                 |
-| ------------------ | --------------------- | ----------------------- |
-| `JWT_SECRET`       | JWT signing secret    | `your-jwt-secret`       |
-| `AUTH_SERVICE_URL` | Auth service endpoint | `http://localhost:3001` |
+| Variable          | Purpose                              | Example                        | Required |
+| ----------------- | ------------------------------------ | ------------------------------ | -------- |
+| `SERVER_URL`      | NATS server address                  | `localhost:4222`               | Yes      |
+| `STARTUP_TYPE`    | Service startup type                 | `nats`                         | Yes      |
+| `PRODUCER_STREAM` | Stream name for outbound messages    | `config.notification.response` | Yes      |
+| `CONSUMER_STREAM` | Stream name for inbound messages     | `config.notification`          | Yes      |
+| `STREAM_SUBJECT`  | NATS subject for configuration       | `config.notification`          | Yes      |
+
+### APM (Application Performance Monitoring) Variables
+
+| Variable            | Purpose                       | Example                         | Required |
+| ------------------- | ----------------------------- | ------------------------------- | -------- |
+| `APM_ACTIVE`        | Enable/disable APM monitoring | `true`, `false`                 | No       |
+| `APM_URL`           | Elastic APM server URL        | `http://localhost:8200`         | No       |
+| `APM_SECRET_TOKEN`  | APM authentication token      | `your-secret-token`             | No       |
+| `APM_SERVICE_NAME`  | Service name in APM           | `data-enrichment`               | No       |
+
+### Authentication Variables
+
+| Variable               | Purpose                               | Example                                    | Required |
+| ---------------------- | ------------------------------------- | ------------------------------------------ | -------- |
+| `TAZAMA_AUTH_URL`      | Tazama authentication service URL     | `http://localhost:3020/v1/auth`            | Yes      |
+| `AUTH_PUBLIC_KEY_PATH` | Path to JWT public key file           | `public-key.pem`                           | Yes      |
+| `CERT_PATH_PUBLIC`     | Path to public certificate            | `public-key.pem`                           | Yes      |
+
+### Logging Variables
+
+| Variable          | Purpose                                   | Default | Example                  | Required |
+| ----------------- | ----------------------------------------- | ------- | ------------------------ | -------- |
+| `SIDECAR_HOST`    | Logstash sidecar host and port            | -       | `localhost:5000`         | Yes      |
+| `LOGSTASH_LEVEL`  | Logging level for Logstash                | `info`  | `info`, `debug`, `error` | Yes      |
 
 ## API
 
@@ -92,21 +115,21 @@ The service will be available at `http://localhost:3001`
 
 Validates, enriches, and processes data.
 
-#### Request
+**Endpoint:** `POST /{endpoint}`
 
-- **Method:** POST
-- **URL:** `/{endpoint}`
-- **Headers:**
-  - `Authorization: Bearer <jwt-token>`
-  - `Content-Type: application/json`
-- **Body:**
+**Headers:**
+- `Authorization: Bearer <jwt-token>`
+- `Content-Type: application/json`
+
+**Request Body:**
 
 ```json
 {
   "body": {
-    "Name": "xyz",
-    "country": "country-1",
-    "city": "city-1",
+    "Name": "John Doe",
+    "country": "USA",
+    "city": "New York",
+    "email": "john.doe@example.com"
   }
 }
 ```
@@ -126,7 +149,7 @@ Validates, enriches, and processes data.
 
 ## Internal Process Flow
 
-### Sequence Diagram for Push Job
+Push jobs are triggered by external API calls and process data immediately.
 
 ```mermaid
 sequenceDiagram
@@ -135,36 +158,44 @@ sequenceDiagram
     participant Redis as Redis Cache
     participant DB as PostgreSQL
     
-    Client->>DEAPI: 1. POST /{endpoint}
+    Client->>DEAPI: 1. POST /{endpoint} (with JWT)
     DEAPI->>DEAPI: 2. Validate JWT token
-    DEAPI->>Redis: 3. Fetch job from cache
-    Redis-->>DEAPI: Job
-    DEAPI->>DEAPI: 4. Validate data
+    DEAPI->>Redis: 3. Fetch job config from cache
+    Redis-->>DEAPI: Job configuration
+    DEAPI->>DEAPI: 4. Validate data against schema
     alt Validation Failed
         DEAPI-->>Client: 400: Validation errors
     end
-    DEAPI->>DEAPI: 5. Enrich & transform data
-    DEAPI->>DB: 6. Store job relationship
+    DEAPI->>DEAPI: 5. Transform & enrich data
+    DEAPI->>DB: 6. Store enriched data
     DEAPI-->>Client: 7. 200: Success response
 ```
 
-### Sequence Diagram for Pull Job
+### Pull Job Flow
+
+Pull jobs are scheduled via NATS notifications and execute based on cron expressions.
 
 ```mermaid
 sequenceDiagram
-    participant TCS as TCS
-    participant NATS as NATS
+    participant TCS as TCS Configuration Service
+    participant NATS as NATS Server
     participant DEAPI as Data Enrichment Service
+    participant Source as External Source (HTTP/SFTP)
     participant DB as PostgreSQL
     
-    TCS->>NATS: 1. Deploy Job
-    NATS->>DEAPI: 2. Notify Job Activation
-    DEAPI->>DEAPI: 3. Job Execution/Removal
-    DEAPI->>DEAPI: 4. Data Transformation (JSON)
-    alt Ingestion Failed
-        DEAPI-->>DEAPI: Job Removal
+    TCS->>NATS: 1. Publish job configuration
+    NATS->>DEAPI: 2. Notify job activation
+    DEAPI->>DEAPI: 3. Schedule cron job
+    Note over DEAPI: Wait for cron trigger
+    DEAPI->>Source: 4. Fetch data (HTTP/SFTP)
+    Source-->>DEAPI: Raw data (JSON/CSV/TSV)
+    DEAPI->>DEAPI: 5. Transform to JSON
+    alt Transformation Failed
+        DEAPI->>DEAPI: Increment failure count
+        DEAPI->>DEAPI: Remove job if limit reached
     end
-    DEAPI->>DB: 5. Ingest Data
+    DEAPI->>DB: 6. Ingest transformed data
+    DEAPI->>NATS: 7. Send ACK/NACK response
 ```
 
 ## Testing
