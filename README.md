@@ -149,6 +149,8 @@ Validates, enriches, and processes data.
 
 ## Internal Process Flow
 
+### Push Job Flow
+
 Push jobs are triggered by external API calls and process data immediately.
 
 ```mermaid
@@ -212,8 +214,6 @@ npm run test:cov
 # Run tests in watch mode
 npm run test:watch
 ```
-
-For testing instructions, see `/docs/how to test dems.readme.md`
 
 ## Troubleshooting
 
