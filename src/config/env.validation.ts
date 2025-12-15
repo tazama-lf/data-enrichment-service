@@ -23,8 +23,14 @@ export class EnvironmentVariables {
   @IsString()
   ENCRYPTION_KEY!: string;
 
+  @IsString()
+  CORS_ORIGINS!: string;
+
   @IsNumber()
   SALT_ROUNDS!: number;
+
+  @IsNumber()
+  PORT!: number;
 
   @IsString()
   SIZE!: string;

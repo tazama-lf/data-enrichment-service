@@ -78,6 +78,7 @@ export class DatabaseService {
 
       this.loggerService.error(`Error inserting rows into table "${tableName}": ${errorMsg}`);
       await this.insertPullJobHistory(jobId, rows.length, 0, errorMsg, tenantId, type);
+      throw new Error(errorMsg);
     }
   }
 

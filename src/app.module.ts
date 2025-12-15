@@ -11,6 +11,7 @@ import { NotifyModule } from './notify/notify.module';
 import { RedisModule } from './redis/redis.module';
 import { AuthModule } from './auth/auth.module';
 import { ApmModule } from './apm/apm.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { ApmModule } from './apm/apm.module';
       isGlobal: true,
       validate,
     }),
+    ScheduleModule.forRoot(),
     JobModule,
     ExecutorModule,
     LoggerModule,

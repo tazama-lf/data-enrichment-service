@@ -82,21 +82,22 @@ export class ExecutorService {
   @ApmSpan('sftp-connection')
   async createSftpConnection(sftpCon: SFTPConnection): Promise<SFTPClient> {
     const sftp = new SFTPClient();
+    const config = {
+      host: sftpCon.host,
+      port: sftpCon.port,
+      username: sftpCon.user_name,
+    };
     try {
-      if (sftpCon.auth_type === AuthType.USERNAME_PASSWORD && sftpCon.password) {
-        await sftp.connect({
-          host: sftpCon.host,
-          port: sftpCon.port,
-          username: sftpCon.user_name,
-          password: decrypt(sftpCon.password),
-        });
-      } else if (sftpCon.private_key) {
-        await sftp.connect({
-          host: sftpCon.host,
-          port: sftpCon.port,
-          username: sftpCon.user_name,
-          privateKey: decrypt(sftpCon.private_key),
-        });
+      if (sftpCon.auth_type === AuthType.USERNAME_PASSWORD) {
+        if (!sftpCon.password) {
+          throw new Error('Password required for USERNAME_PASSWORD auth type');
+        }
+        await sftp.connect({ ...config, password: decrypt(sftpCon.password) });
+      } else {
+        if (!sftpCon.private_key) {
+          throw new Error('Private key required for PRIVATE_KEY auth type');
+        }
+        await sftp.connect({ ...config, privateKey: decrypt(sftpCon.private_key) });
       }
       return sftp;
     } catch (error: unknown) {
@@ -174,8 +175,9 @@ export class ExecutorService {
         record_delimiter: ['\r\n', '\n', '\r'],
       });
       return records as Array<Record<string, unknown>>;
-    } catch (error) {
-      this.loggerService.error('Error transforming file:', error);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.loggerService.error(`Error transforming file: ${message}`);
       throw error;
     }
   }

@@ -113,10 +113,21 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
         `;
 
       const result = await this.db.query(query, [endpointId]);
-      const record = result.rows[0] as PushJob | Job;
+      const record = result.rows[0] as PushJob | Job | undefined;
+
+      if (!record) {
+        this.logger.warn(`No record found for endpointId: ${endpointId}`);
+        await handleResponse({
+          endpointId,
+          status: Status.NACK,
+          error: `Record not found for endpointId: ${endpointId}`,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
 
       if (configType === ConfigType.PUSH) {
-        await this.redis.setJson(record.path!, JSON.stringify(record), this.cacheTtl);
+        await this.redis.setJson(record.path, JSON.stringify(record), this.cacheTtl);
         this.logger.log(`Updated cache for key: ${record.path}`);
       } else {
         const data = record as Job;
