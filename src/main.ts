@@ -18,10 +18,10 @@ async function bootstrap(): Promise<void> {
   app.useGlobalInterceptors(new ApmInterceptor(apmService));
   app.use(json({ limit: configService.get<string>('SIZE', '100mb') }));
   app.enableCors({
-    origin: true,
+    origin: configService.get<string>('CORS_ORIGINS', 'localhost').split(','),
     credentials: true,
   });
-  const port = configService.get<number>('port', 3001);
+  const port = configService.get<number>('PORT', 3001);
 
   await app.listen(port);
 }
