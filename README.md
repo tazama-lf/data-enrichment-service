@@ -51,8 +51,10 @@ The service will be available at `http://localhost:3001`
 | ---------------- | -------------------------------------- | ------- | ------------------------ | -------- |
 | `FUNCTION_NAME`  | Service identifier                     | -       | `data-enrichment`        | Yes      |
 | `NODE_ENV`       | Application environment                | `dev`   | `dev`, `prod`, `test`    | Yes      |
+| `PORT`           | Port number for HTTP server            | `3001`  | `3001`, `3000`           | Yes      |
 | `MAX_CPU`        | Maximum CPU cores to use               | `1`     | `1`, `2`, `4`            | Yes      |
 | `SIZE`           | Maximum request body size              | `100mb` | `150mb`                  | Yes      |
+| `CORS_ORIGINS`   | Allowed CORS origins (comma-separated) | -       | `localhost,10.10.80.37`  | Yes      |
 | `SALT_ROUNDS`    | Password hashing rounds                | `9`     | `10`, `12`               | Yes      |
 | `ENCRYPTION_KEY` | AES encryption key for sensitive data  | -       | `32-character-hex-key`   | Yes      |
 
@@ -61,27 +63,38 @@ The service will be available at `http://localhost:3001`
 | Variable                      | Purpose                          | Example                                                  | Required |
 | ----------------------------- | -------------------------------- | -------------------------------------------------------- | -------- |
 | `CONFIGURATION_DATABASE_URL`  | PostgreSQL connection string     | `postgresql://postgres:password@localhost:5432/database` | Yes      |
+| `POSTGRES_CONTAINER_NAME`     | PostgreSQL Docker container name | `my_postgres`                                            | No       |
+| `POSTGRES_PORT`               | PostgreSQL port                  | `5432`                                                   | No       |
+| `POSTGRES_USER`               | PostgreSQL username              | `postgres`                                               | No       |
+| `POSTGRES_PASSWORD`           | PostgreSQL password              | `postgres`                                               | No       |
+| `POSTGRES_DB`                 | PostgreSQL database name         | `mydb`                                                   | No       |
 
 **Note:** The connection string format is `postgresql://[user[:password]@][host][:port][/database]`
 
 ### Redis Cache Variables
 
-| Variable         | Purpose                       | Default | Example          | Required |
-| ---------------- | ----------------------------- | ------- | ---------------- | -------- |
-| `REDIS_HOST`     | Redis server hostname         | -       | `localhost`      | Yes      |
-| `REDIS_PORT`     | Redis server port             | `6379`  | `6379`           | Yes      |
-| `REDIS_PASSWORD` | Redis authentication password | -       | `redis-password` | Yes      |
-| `CACHE_TTL`      | Cache time-to-live (seconds)  | `3600`  | `86400`          | Yes      |
+| Variable                | Purpose                       | Default | Example                    | Required |
+| ----------------------- | ----------------------------- | ------- | -------------------------- | -------- |
+| `REDIS_HOST`            | Redis server hostname         | -       | `localhost`, `10.10.80.37` | Yes      |
+| `REDIS_PORT`            | Redis server port             | `6379`  | `6379`                     | Yes      |
+| `REDIS_PASSWORD`        | Redis authentication password | -       | `redis-password`           | Yes      |
+| `REDIS_CONTAINER_NAME`  | Redis Docker container name   | -       | `data-enrichment-redis`    | No       |
+| `CACHE_TTL`             | Cache time-to-live (seconds)  | `3600`  | `86400`                    | Yes      |
 
 ### NATS Messaging Variables
 
-| Variable          | Purpose                              | Example                        | Required |
-| ----------------- | ------------------------------------ | ------------------------------ | -------- |
-| `SERVER_URL`      | NATS server address                  | `localhost:4222`               | Yes      |
-| `STARTUP_TYPE`    | Service startup type                 | `nats`                         | Yes      |
-| `PRODUCER_STREAM` | Stream name for outbound messages    | `config.notification.response` | Yes      |
-| `CONSUMER_STREAM` | Stream name for inbound messages     | `config.notification`          | Yes      |
-| `STREAM_SUBJECT`  | NATS subject for configuration       | `config.notification`          | Yes      |
+| Variable               | Purpose                              | Example                        | Required |
+| ---------------------- | ------------------------------------ | ------------------------------ | -------- |
+| `SERVER_URL`           | NATS server address (host:port)      | `localhost:4222`             | Yes      |
+| `STARTUP_TYPE`         | Service startup type                 | `nats`                         | Yes      |
+| `PRODUCER_STREAM`      | Stream name for outbound messages    | `config.notification.response` | Yes      |
+| `CONSUMER_STREAM`      | Stream name for inbound messages     | `config.notification`          | Yes      |
+| `STREAM_SUBJECT`       | NATS subject for configuration       | `config.notification`          | Yes      |
+| `NATS_CONTAINER_NAME`  | NATS Docker container name           | `data-enrichment-nats`         | No       |
+| `NATS_PORT`            | NATS client port                     | `4222`                         | No       |
+| `NATS_HTTP_PORT`       | NATS HTTP monitoring port            | `8222`                         | No       |
+
+**Note:** `SERVER_URL` should be in format `host:port` without protocol prefix (e.g., `10.10.80.34:4222`, not `nats://10.10.80.34:4222`).
 
 ### APM (Application Performance Monitoring) Variables
 
@@ -233,10 +246,12 @@ npm run test:watch
 
 **Issue:** NATS messaging failures
 - Check NATS server is running: `docker ps` or service status
-- Verify `NATS_URL` in `.env`
+- Verify `SERVER_URL` in `.env`
 
 ### Authentication Errors
 
 - Verify JWT token is valid and not expired
-- Check `JWT_SECRET` matches across services
-- Ensure `AUTH_SERVICE_URL` is reachable
+- Check `AUTH_PUBLIC_KEY_PATH` file exists and matches the public key from Tazama Auth Service
+- Ensure `TAZAMA_AUTH_URL` is reachable and responding
+- Verify `CERT_PATH_PUBLIC` points to valid RSA public key file
+- Test public key file is readable by the service: `cat public-key.pem`
