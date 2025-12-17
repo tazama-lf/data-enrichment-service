@@ -127,7 +127,7 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
       }
 
       if (configType === ConfigType.PUSH) {
-        await this.redis.setJson(record.path, JSON.stringify(record), this.cacheTtl);
+        await this.redis.setJson(record.path!, JSON.stringify(record), this.cacheTtl);
         this.logger.log(`Updated cache for key: ${record.path}`);
       } else {
         const data = record as Job;
