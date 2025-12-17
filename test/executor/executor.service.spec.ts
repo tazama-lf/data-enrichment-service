@@ -203,6 +203,7 @@ describe('ExecutorService', () => {
 
       expect(mockHttpService.get).toHaveBeenCalledWith('https://api.example.com/data', {
         headers: { Authorization: 'Bearer token' },
+        timeout: 86400,
       });
       expect(mockDatabaseService.updateTable).toHaveBeenCalledWith(
         'tenant-456_test_table',

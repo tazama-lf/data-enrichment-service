@@ -89,7 +89,7 @@ export class DatabaseService implements OnModuleDestroy {
 
   async ensureTable(tableName: string): Promise<void> {
     try {
-      if (!/^ [a - zA - Z_][a - zA - Z0 -9_] * $ /.test(tableName)) {
+      if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(tableName)) {
         throw new Error(`Invalid table name: ${tableName}`);
       }
 
@@ -112,7 +112,6 @@ export class DatabaseService implements OnModuleDestroy {
       } else {
         this.loggerService.error(`Unknown error while ensuring table "${tableName}": ${JSON.stringify(error)}`);
       }
-      throw error;
     }
   }
 

@@ -38,6 +38,9 @@ export class EnvironmentVariables {
   @IsNumber()
   CACHE_TTL!: number;
 
+  @IsNumber()
+  HTTP_TIMEOUT!: number;
+
   @IsString()
   REDIS_HOST!: string;
 
