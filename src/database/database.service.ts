@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { LoggerService } from '@tazama-lf/frms-coe-lib';
 import { ConfigType } from '@tazama-lf/tcs-lib';
 import { createHash } from 'node:crypto';
@@ -6,7 +6,7 @@ import { Pool, QueryResult, QueryResultRow } from 'pg';
 import { v4 } from 'uuid';
 
 @Injectable()
-export class DatabaseService {
+export class DatabaseService implements OnModuleDestroy {
   private readonly pool: Pool;
 
   constructor(private readonly loggerService: LoggerService) {
@@ -14,6 +14,11 @@ export class DatabaseService {
       connectionString: process.env.CONFIGURATION_DATABASE_URL,
       max: 10,
     });
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    await this.pool.end();
+    this.loggerService.log('Database pool closed');
   }
 
   async query<T extends QueryResultRow = QueryResultRow>(sql: string, params?: unknown[]): Promise<QueryResult<T>> {
@@ -84,7 +89,7 @@ export class DatabaseService {
 
   async ensureTable(tableName: string): Promise<void> {
     try {
-      if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(tableName)) {
+      if (!/^ [a - zA - Z_][a - zA - Z0 -9_] * $ /.test(tableName)) {
         throw new Error(`Invalid table name: ${tableName}`);
       }
 
@@ -107,6 +112,7 @@ export class DatabaseService {
       } else {
         this.loggerService.error(`Unknown error while ensuring table "${tableName}": ${JSON.stringify(error)}`);
       }
+      throw error;
     }
   }
 
