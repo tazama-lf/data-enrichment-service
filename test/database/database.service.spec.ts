@@ -47,10 +47,6 @@ describe('DatabaseService', () => {
     service = module.get<DatabaseService>(DatabaseService);
   });
 
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
-
   it('should be defined', () => {
     expect(service).toBeDefined();
   });

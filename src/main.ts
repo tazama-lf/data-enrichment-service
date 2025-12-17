@@ -26,6 +26,8 @@ async function bootstrap(): Promise<void> {
   await app.listen(port);
 }
 
-bootstrap().catch(() => {
+bootstrap().catch((error: unknown) => {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  process.stderr.write(`Application failed to start: ${errorMessage}\n`);
   process.exit(1);
 });
