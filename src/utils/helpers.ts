@@ -2,7 +2,11 @@ import * as crypto from 'node:crypto';
 
 const { ENCRYPTION_KEY } = process.env;
 
-const buffer = Buffer.from(ENCRYPTION_KEY!, 'utf8');
+if (!ENCRYPTION_KEY) {
+  throw new Error('ENCRYPTION_KEY environment variable is required');
+}
+
+const buffer = Buffer.from(ENCRYPTION_KEY, 'utf8');
 
 if (buffer.length !== 32) {
   throw new Error('ENCRYPTION_KEY must be 32 bytes for aes-256-cbc');
@@ -18,6 +22,11 @@ export function decrypt(text: string): string {
 
   try {
     const iv = Buffer.from(ivHex, 'hex');
+
+    if (iv.length !== 16) {
+      throw new Error('Invalid IV length');
+    }
+
     const decipher = crypto.createDecipheriv('aes-256-cbc', buffer, iv);
 
     let decrypted = decipher.update(encrypted, 'hex', 'utf8');

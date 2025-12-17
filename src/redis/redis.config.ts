@@ -3,7 +3,7 @@ import type { RedisConfig } from '@tazama-lf/frms-coe-lib/lib/interfaces';
 
 export const createRedisConfig = (configService: ConfigService): RedisConfig => {
   const host = configService.get<string>('REDIS_HOST');
-  const port = configService.get<number>('REDIS_PORT');
+  const port = Number(configService.get<string>('REDIS_PORT'));
   const password = configService.get<string>('REDIS_PASSWORD');
 
   if (!host || !port || !password) {
@@ -11,7 +11,7 @@ export const createRedisConfig = (configService: ConfigService): RedisConfig => 
   }
 
   return {
-    db: configService.get<number>('REDIS_DB', 0),
+    db: Number(configService.get<string>('REDIS_DB') ?? 0),
     servers: [
       {
         host,
