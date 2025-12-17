@@ -296,7 +296,7 @@ describe('NotifyService', () => {
       });
     });
 
-    it('should handle inactive pull config by deleting cron job', async () => {
+    it('should warn and not delete cron job when schedule_id is null', async () => {
       const handleResponse = jest.fn().mockResolvedValue(undefined);
       const reqObj = {
         dataPayload: JSON.stringify({
@@ -305,33 +305,12 @@ describe('NotifyService', () => {
         }),
       };
 
-      const inactivePullJob = { ...mockPullJob, publishing_status: ScheduleStatus.INACTIVE };
-      mockDatabaseService.query.mockResolvedValue({
-        rows: [inactivePullJob],
-        rowCount: 1,
-      } as QueryResult);
-
-      await service.handleNatsMessage(reqObj, handleResponse);
-
-      expect(mockExecutorService.deleteCronJob).toHaveBeenCalledWith('pull-123', 'schedule-789');
-      expect(mockExecutorService.addCronJob).not.toHaveBeenCalled();
-      expect(handleResponse).toHaveBeenCalledWith({
-        endpointId: 'pull-123',
-        status: 'ACK',
-        timestamp: expect.any(String),
-      });
-    });
-
-    it('should handle pull config with null schedule_id', async () => {
-      const handleResponse = jest.fn().mockResolvedValue(undefined);
-      const reqObj = {
-        dataPayload: JSON.stringify({
-          endpointId: 'pull-123',
-          configType: ConfigType.PULL,
-        }),
+      const pullJobNoSchedule = {
+        ...mockPullJob,
+        schedule_id: null,
+        publishing_status: ScheduleStatus.INACTIVE,
       };
 
-      const pullJobNoSchedule = { ...mockPullJob, schedule_id: null, publishing_status: ScheduleStatus.INACTIVE };
       mockDatabaseService.query.mockResolvedValue({
         rows: [pullJobNoSchedule],
         rowCount: 1,
@@ -339,7 +318,34 @@ describe('NotifyService', () => {
 
       await service.handleNatsMessage(reqObj, handleResponse);
 
-      expect(mockExecutorService.deleteCronJob).toHaveBeenCalledWith('pull-123', null);
+      expect(mockExecutorService.deleteCronJob).not.toHaveBeenCalled();
+      expect(mockLoggerService.warn).toHaveBeenCalledWith('Cannot delete cron job: schedule_id missing for job pull-123');
+    });
+
+    it('should warn and not delete cron job when schedule_id is null', async () => {
+      const handleResponse = jest.fn().mockResolvedValue(undefined);
+      const reqObj = {
+        dataPayload: JSON.stringify({
+          endpointId: 'pull-123',
+          configType: ConfigType.PULL,
+        }),
+      };
+
+      const pullJobNoSchedule = {
+        ...mockPullJob,
+        schedule_id: null,
+        publishing_status: ScheduleStatus.INACTIVE,
+      };
+
+      mockDatabaseService.query.mockResolvedValue({
+        rows: [pullJobNoSchedule],
+        rowCount: 1,
+      } as QueryResult);
+
+      await service.handleNatsMessage(reqObj, handleResponse);
+
+      expect(mockExecutorService.deleteCronJob).not.toHaveBeenCalled();
+      expect(mockLoggerService.warn).toHaveBeenCalledWith('Cannot delete cron job: schedule_id missing for job pull-123');
     });
   });
 

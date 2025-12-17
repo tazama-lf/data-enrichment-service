@@ -45,9 +45,11 @@ export class ExecutorService {
     await this.redis.set(jobKey, newFailures, this.cacheTtl);
 
     if (job.iterations && newFailures >= job.iterations) {
-      const cronJob = this.schedulerRegistry.getCronJob(jobKey);
-      await cronJob.stop();
-      this.schedulerRegistry.deleteCronJob(jobKey);
+      const cronJob = this.schedulerRegistry.getCronJobs().get(jobKey);
+      if (cronJob) {
+        await cronJob.stop();
+        this.schedulerRegistry.deleteCronJob(jobKey);
+      }
     }
   }
 
@@ -71,7 +73,7 @@ export class ExecutorService {
     const httpCon = job.connection as HTTPConnection;
     const { data, status } = await firstValueFrom(this.httpService.get<unknown>(httpCon.url, { headers: httpCon.headers }));
 
-    if (status === 200 && typeof data === 'object') {
+    if (status === 200 && data !== null && typeof data === 'object') {
       await this.db.updateTable(`${job.tenant_id}_${job.table_name}`, job.id, data, job.tenant_id, ConfigType.PULL);
       await this.redis.set(jobKey, 0, this.cacheTtl);
     } else {

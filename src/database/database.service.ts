@@ -84,8 +84,14 @@ export class DatabaseService {
 
   async ensureTable(tableName: string): Promise<void> {
     try {
+      if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(tableName)) {
+        throw new Error(`Invalid table name: ${tableName}`);
+      }
+
+      const safeTableName = `"${tableName.replace(/"/g, '""')}"`;
+
       const createQuery = `
-        CREATE TABLE IF NOT EXISTS ${tableName} (
+        CREATE TABLE IF NOT EXISTS ${safeTableName} (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           data JSONB NOT NULL,
           job_id TEXT NOT NULL,

@@ -37,7 +37,8 @@ cp .env.sample .env
 
 ```sh
 npm install
-docker-compose up -d redis nats postgres (do not worry if full-stack-docker is running)
+# Start required services (skip if full-stack-docker is already running)
+docker-compose up -d redis nats postgres
 npm run start:dev
 ```
 
@@ -110,8 +111,6 @@ The service will be available at `http://localhost:3001`
 | Variable               | Purpose                               | Example                                    | Required |
 | ---------------------- | ------------------------------------- | ------------------------------------------ | -------- |
 | `TAZAMA_AUTH_URL`      | Tazama authentication service URL     | `http://localhost:3020/v1/auth`            | Yes      |
-| `AUTH_PUBLIC_KEY_PATH` | Path to JWT public key file           | `public-key.pem`                           | Yes      |
-| `CERT_PATH_PUBLIC`     | Path to public certificate            | `public-key.pem`                           | Yes      |
 
 ### Logging Variables
 
@@ -251,7 +250,5 @@ npm run test:watch
 ### Authentication Errors
 
 - Verify JWT token is valid and not expired
-- Check `AUTH_PUBLIC_KEY_PATH` file exists and matches the public key from Tazama Auth Service
 - Ensure `TAZAMA_AUTH_URL` is reachable and responding
-- Verify `CERT_PATH_PUBLIC` points to valid RSA public key file
 - Test public key file is readable by the service: `cat public-key.pem`
