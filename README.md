@@ -58,6 +58,7 @@ The service will be available at `http://localhost:3001`
 | `CORS_ORIGINS`   | Allowed CORS origins (comma-separated) | -       | `localhost,10.10.80.37`  | Yes      |
 | `SALT_ROUNDS`    | Password hashing rounds                | `9`     | `10`, `12`               | Yes      |
 | `ENCRYPTION_KEY` | AES encryption key for sensitive data  | -       | `32-character-hex-key`   | Yes      |
+| `HTTP_TIMEOUT` | HTTP Timeout Limit  | -       | `3000`   | No      |
 
 ### Database Variables
 
