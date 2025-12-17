@@ -297,7 +297,7 @@ describe('ExecutorService', () => {
       expect(mockRedisService.set).toHaveBeenCalledWith('job-key', 0, 86400);
     });
 
-    it('should handle null data as object', async () => {
+    it('should call handleFailure when data is null', async () => {
       const httpJob = { ...mockJob, source_type: SourceType.HTTP };
       mockHttpService.get.mockReturnValue(
         of({
@@ -309,9 +309,12 @@ describe('ExecutorService', () => {
         }),
       );
 
+      const handleFailureSpy = jest.spyOn(service, 'handleFailure').mockResolvedValue(undefined);
+
       await service.handleHttpJob(httpJob, 'job-key');
 
-      expect(mockDatabaseService.updateTable).toHaveBeenCalledWith('tenant-456_test_table', 'job-123', null, 'tenant-456', ConfigType.PULL);
+      expect(handleFailureSpy).toHaveBeenCalledWith(httpJob, 'job-key');
+      expect(mockDatabaseService.updateTable).not.toHaveBeenCalled();
     });
   });
 
