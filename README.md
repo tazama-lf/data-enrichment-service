@@ -241,7 +241,7 @@ npm run test:watch
 - Confirm credentials in `.env` match your database
 
 **Issue:** Redis connection errors
-- Check REDIS is running: `docker ps` or service status
+- Check Redis is running: `docker ps` or service status
 - Verify `REDIS_HOST`, `REDIS_PORT`, and `REDIS_PASSWORD` in `.env`
 
 **Issue:** NATS messaging failures
