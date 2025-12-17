@@ -45,9 +45,11 @@ export class ExecutorService {
     await this.redis.set(jobKey, newFailures, this.cacheTtl);
 
     if (job.iterations && newFailures >= job.iterations) {
-      const cronJob = this.schedulerRegistry.getCronJob(jobKey);
-      await cronJob.stop();
-      this.schedulerRegistry.deleteCronJob(jobKey);
+      const cronJob = this.schedulerRegistry.getCronJobs().get(jobKey);
+      if (cronJob) {
+        await cronJob.stop();
+        this.schedulerRegistry.deleteCronJob(jobKey);
+      }
     }
   }
 

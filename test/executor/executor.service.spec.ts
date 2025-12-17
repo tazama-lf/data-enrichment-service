@@ -643,11 +643,13 @@ describe('ExecutorService', () => {
     });
 
     it('should stop and delete job when iterations limit reached', async () => {
+      const mockCronJob = { stop: jest.fn().mockResolvedValue(undefined) };
+
+      mockSchedulerRegistry.getCronJobs.mockReturnValue(new Map([['job-key', mockCronJob as unknown as CronJob]]));
+
+      mockJob.iterations = 2;
+
       mockRedisService.getJson.mockResolvedValue('2');
-      const mockCronJob = {
-        stop: jest.fn().mockResolvedValue(undefined),
-      };
-      mockSchedulerRegistry.getCronJob.mockReturnValue(mockCronJob as unknown as CronJob);
 
       await service.handleFailure(mockJob, 'job-key');
 

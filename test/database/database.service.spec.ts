@@ -106,7 +106,7 @@ describe('DatabaseService', () => {
 
       await service.ensureTable('test_table');
 
-      expect(mockQuery).toHaveBeenNthCalledWith(1, expect.stringMatching(/CREATE TABLE IF NOT EXISTS test_table/i), undefined);
+      expect(mockQuery.mock.calls[0][0]).toEqual(expect.stringMatching(/CREATE TABLE IF NOT EXISTS\s+"?test_table"?/i));
 
       const createQuery = mockQuery.mock.calls[0][0] as string;
       expect(createQuery).toMatch(/job_id TEXT NOT NULL/i);

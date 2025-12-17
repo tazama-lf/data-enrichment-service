@@ -136,7 +136,11 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
         if (isActive) {
           await this.executorService.addCronJob(data);
         } else {
-          await this.executorService.deleteCronJob(data.id, data.schedule_id!);
+          if (!data.schedule_id) {
+            this.logger.warn(`Cannot delete cron job: schedule_id missing for job ${data.id}`);
+            return;
+          }
+          await this.executorService.deleteCronJob(data.id, data.schedule_id);
         }
       }
 
