@@ -184,9 +184,12 @@ describe('DatabaseService', () => {
     it('should handle empty rows array', async () => {
       mockQuery.mockResolvedValue({} as QueryResult);
 
-      await service.insertRows('test_table', [], 'job-123', 'tenant-123', ConfigType.PUSH);
+      await expect(service.insertRows('test_table', [], 'job-123', 'tenant-123', ConfigType.PUSH)).rejects.toThrow(
+        'No data provided for insertion',
+      );
 
       expect(mockLoggerService.error).toHaveBeenCalledWith(expect.stringContaining('No data provided for insertion'));
+
       expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO job_history/i), [
         'tenant-123',
         'job-123',
@@ -198,29 +201,33 @@ describe('DatabaseService', () => {
     });
 
     it('should handle empty columns in first row', async () => {
-      mockQuery.mockResolvedValue({} as QueryResult);
       const rows = [{}];
 
-      await service.insertRows('test_table', rows, 'job-123', 'tenant-123', ConfigType.PUSH);
+      await expect(service.insertRows('test_table', rows, 'job-123', 'tenant-123', ConfigType.PUSH)).rejects.toThrow(
+        'No columns found in the data for insertion.',
+      );
 
-      expect(mockLoggerService.error).toHaveBeenCalledWith(expect.stringContaining('No columns found in the data for insertion'));
+      expect(mockLoggerService.error).toHaveBeenCalledWith(expect.stringContaining('No columns found in the data for insertion.'));
+
       expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO job_history/i), [
         'tenant-123',
         'job-123',
         1,
         0,
-        expect.stringContaining('No columns found'),
+        'No columns found in the data for insertion.',
         ConfigType.PUSH,
       ]);
     });
 
     it('should handle Error instances during insertion', async () => {
       mockQuery.mockRejectedValueOnce(new Error('Insertion failed')).mockResolvedValue({} as QueryResult);
+
       const rows = [{ id: '1', name: 'test' }];
 
-      await service.insertRows('test_table', rows, 'job-123', 'tenant-123', ConfigType.PUSH);
+      await expect(service.insertRows('test_table', rows, 'job-123', 'tenant-123', ConfigType.PUSH)).rejects.toThrow('Insertion failed');
 
       expect(mockLoggerService.error).toHaveBeenCalledWith('Error inserting rows into table "test_table": Insertion failed');
+
       expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO job_history/i), [
         'tenant-123',
         'job-123',
@@ -234,11 +241,15 @@ describe('DatabaseService', () => {
     it('should handle non-Error exceptions during insertion', async () => {
       const errorObj = { code: '23505', detail: 'Duplicate key' };
       mockQuery.mockRejectedValueOnce(errorObj).mockResolvedValue({} as QueryResult);
+
       const rows = [{ id: '1', name: 'test' }];
 
-      await service.insertRows('test_table', rows, 'job-123', 'tenant-123', ConfigType.PULL);
+      await expect(service.insertRows('test_table', rows, 'job-123', 'tenant-123', ConfigType.PULL)).rejects.toThrow(
+        JSON.stringify(errorObj),
+      );
 
       expect(mockLoggerService.error).toHaveBeenCalledWith(expect.stringContaining('Error inserting rows into table "test_table"'));
+
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringMatching(/INSERT INTO job_history/i),
         expect.arrayContaining(['tenant-123', 'job-123', 1, 0, expect.any(String), ConfigType.PULL]),

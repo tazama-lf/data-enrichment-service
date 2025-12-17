@@ -35,7 +35,7 @@ describe('ExecutorService', () => {
   const mockJob: Job = {
     id: 'job-123',
     tenant_id: 'tenant-456',
-    path: null,
+    path: '/customers/data',
     table_name: 'test_table',
     schedule_id: 'schedule-789',
     source_type: SourceType.HTTP,
@@ -619,7 +619,8 @@ describe('ExecutorService', () => {
       const file = { path: '/data/test.json', file_type: FileType.JSON, delimiter: '' };
 
       await expect(service.transformFileToJSON(mockSftpClient, file)).rejects.toThrow();
-      expect(mockLoggerService.error).toHaveBeenCalledWith('Error transforming file:', expect.any(Error));
+
+      expect(mockLoggerService.error).toHaveBeenCalledWith(expect.stringContaining('Error transforming file'));
     });
   });
 
