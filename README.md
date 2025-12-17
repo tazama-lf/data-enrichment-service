@@ -30,7 +30,7 @@ cp .env.sample .env
 
 - Node.js 20+
 - PostgreSQL 15+
-- Valkey 7+
+- Redis 7+
 - NATS Server 2.10+
 
 #### Build and Start
