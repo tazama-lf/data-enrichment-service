@@ -38,8 +38,9 @@ export class EnvironmentVariables {
   @IsNumber()
   CACHE_TTL!: number;
 
+  @IsOptional()
   @IsNumber()
-  HTTP_TIMEOUT!: number;
+  HTTP_TIMEOUT?: number = 30000;
 
   @IsString()
   REDIS_HOST!: string;
@@ -106,7 +107,8 @@ export const validate = (config: Record<string, unknown>): EnvironmentVariables 
   });
 
   if (errors.length > 0) {
-    throw new Error(errors.toString());
+    const messages = errors.map((err) => Object.values(err.constraints ?? {}).join(', ')).join('; ');
+    throw new Error(`Environment validation failed: ${messages}`);
   }
 
   return validatedConfig;

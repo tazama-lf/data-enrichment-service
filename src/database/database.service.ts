@@ -112,6 +112,7 @@ export class DatabaseService implements OnModuleDestroy {
       } else {
         this.loggerService.error(`Unknown error while ensuring table "${tableName}": ${JSON.stringify(error)}`);
       }
+      throw error;
     }
   }
 

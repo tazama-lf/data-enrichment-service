@@ -206,13 +206,17 @@ export class ExecutorService {
   async addCronJob(job: Job): Promise<void> {
     this.loggerService.log('Executing add cron Job');
 
+    if (!job.schedule_id || !job.cron) {
+      throw new Error(`Cannot schedule job ${job.id}: missing schedule_id or cron expression`);
+    }
+
     const { timeZone } = Intl.DateTimeFormat().resolvedOptions();
-    const jobKey = getJobKey(job.id, job.schedule_id!);
+    const jobKey = getJobKey(job.id, job.schedule_id);
 
     await this.redis.set(jobKey, 0, this.cacheTtl);
 
     const cronJob: CronJob = new CronJob(
-      job.cron!,
+      job.cron,
       async () => {
         await this.run(job, jobKey);
       },

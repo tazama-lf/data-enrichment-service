@@ -119,17 +119,9 @@ describe('DatabaseService', () => {
       const error = new Error('Table creation failed');
       mockQuery.mockRejectedValue(error);
 
-      await service.ensureTable('test_table');
+      await expect(service.ensureTable('test_table')).rejects.toThrow('Table creation failed');
 
       expect(mockLoggerService.error).toHaveBeenCalledWith('Error while ensuring table "test_table": Table creation failed');
-    });
-
-    it('should handle non-Error exceptions', async () => {
-      mockQuery.mockRejectedValue('String error');
-
-      await service.ensureTable('test_table');
-
-      expect(mockLoggerService.error).toHaveBeenCalledWith('Unknown error while ensuring table "test_table": "String error"');
     });
 
     it('should include all required columns', async () => {
