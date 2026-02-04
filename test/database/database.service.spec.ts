@@ -1,8 +1,9 @@
 import { Test, type TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../../src/database/database.service';
 import { LoggerService } from '@tazama-lf/frms-coe-lib';
 import { type QueryResult } from 'pg';
-import { ConfigType } from '@tazama-lf/tcs-lib';
+import { ConfigType, IngestMode } from '@tazama-lf/tcs-lib';
 
 const mockQuery = jest.fn();
 const mockConnect = jest.fn();
@@ -29,6 +30,7 @@ jest.mock('../../src/apm/apm.decorators', () => ({
 describe('DatabaseService', () => {
   let service: DatabaseService;
   let mockLoggerService: jest.Mocked<LoggerService>;
+  let mockConfigService: jest.Mocked<ConfigService>;
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -40,8 +42,16 @@ describe('DatabaseService', () => {
       debug: jest.fn(),
     } as unknown as jest.Mocked<LoggerService>;
 
+    mockConfigService = {
+      get: jest.fn((key: string, defaultValue?: any) => defaultValue ?? 1000),
+    } as unknown as jest.Mocked<ConfigService>;
+
     const module: TestingModule = await Test.createTestingModule({
-      providers: [DatabaseService, { provide: LoggerService, useValue: mockLoggerService }],
+      providers: [
+        DatabaseService,
+        { provide: LoggerService, useValue: mockLoggerService },
+        { provide: ConfigService, useValue: mockConfigService },
+      ],
     }).compile();
 
     service = module.get<DatabaseService>(DatabaseService);
@@ -141,7 +151,7 @@ describe('DatabaseService', () => {
 
       await service.insertRows('test_table', rows, 'job-123', 'tenant-123', ConfigType.PUSH);
 
-      expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/CALL rotate_table_with_data/i), ['test_table', JSON.stringify(rows)]);
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO test_table/i), ['1', 'test', 100]);
       expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO job_history/i), [
         'tenant-123',
         'job-123',
@@ -165,7 +175,7 @@ describe('DatabaseService', () => {
 
       await service.insertRows('test_table', rows, 'job-123', 'tenant-123', ConfigType.PULL);
 
-      expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/CALL rotate_table_with_data/i), ['test_table', JSON.stringify(rows)]);
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO test_table/i), ['1', 'test1', '2', 'test2', '3', 'test3']);
       expect(mockLoggerService.log).toHaveBeenCalledWith('Successfully inserted 3 row(s) into "test_table".');
     });
 
@@ -268,56 +278,52 @@ describe('DatabaseService', () => {
       mockQuery.mockResolvedValue({} as QueryResult);
       const data = [{ key: 'value1' }, { key: 'value2' }];
 
-      await service.updateTable('test_table', 'job-123', data, 'tenant-123', ConfigType.PUSH);
+      await service.updateTable('test_table', 'job-123', IngestMode.APPEND, data, 'tenant-123', ConfigType.PUSH);
 
       expect(mockQuery).toHaveBeenNthCalledWith(1, expect.stringMatching(/CREATE TABLE IF NOT EXISTS/i), undefined);
 
-      expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringMatching(/CALL rotate_table_with_data/i),
-        expect.arrayContaining(['test_table', expect.any(String)]),
-      );
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO test_table/i), expect.any(Array));
     });
 
     it('should handle object data by converting to array', async () => {
       mockQuery.mockResolvedValue({} as QueryResult);
       const data = { item1: { key: 'value1' }, item2: { key: 'value2' } };
 
-      await service.updateTable('test_table', 'job-123', data, 'tenant-123', ConfigType.PUSH);
+      await service.updateTable('test_table', 'job-123', IngestMode.APPEND, data, 'tenant-123', ConfigType.PUSH);
 
-      expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/CALL rotate_table_with_data/i), expect.any(Array));
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO test_table/i), expect.any(Array));
     });
 
     it('should handle single object data', async () => {
       mockQuery.mockResolvedValue({} as QueryResult);
       const data = { key: 'value' };
 
-      await service.updateTable('test_table', 'job-123', data, 'tenant-123', ConfigType.PULL);
+      await service.updateTable('test_table', 'job-123', IngestMode.APPEND, data, 'tenant-123', ConfigType.PULL);
 
-      expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/CALL rotate_table_with_data/i), expect.any(Array));
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO test_table/i), expect.any(Array));
     });
 
     it('should stringify data as JSON and include job_id and checksum', async () => {
       mockQuery.mockResolvedValue({} as QueryResult);
       const data = [{ nested: { key: 'value' } }];
 
-      await service.updateTable('test_table', 'job-123', data, 'tenant-123', ConfigType.PUSH);
+      await service.updateTable('test_table', 'job-123', IngestMode.APPEND, data, 'tenant-123', ConfigType.PUSH);
 
-      const storedProcCall = mockQuery.mock.calls.find((call) => (call[0] as string).includes('rotate_table_with_data'));
+      const insertCall = mockQuery.mock.calls.find((call) => (call[0] as string).includes('INSERT INTO test_table'));
 
-      expect(storedProcCall).toBeDefined();
-      const jsonData = JSON.parse(storedProcCall[1][1]);
-      expect(jsonData[0]).toHaveProperty('id', 'test-uuid-123');
-      expect(jsonData[0]).toHaveProperty('data');
-      expect(jsonData[0]).toHaveProperty('job_id', 'job-123');
-      expect(jsonData[0]).toHaveProperty('checksum');
-      expect(jsonData[0].checksum).toMatch(/^[a-f0-9]{64}$/);
+      expect(insertCall).toBeDefined();
+      const params = insertCall[1] as any[];
+      expect(params[0]).toBe('test-uuid-123');
+      expect(params[1]).toBe(JSON.stringify({ nested: { key: 'value' } }));
+      expect(params[2]).toMatch(/^[a-f0-9]{64}$/);
+      expect(params[3]).toBe('job-123');
     });
 
     it('should call ensureTable before inserting', async () => {
       mockQuery.mockResolvedValue({} as QueryResult);
       const data = [{ key: 'value' }];
 
-      await service.updateTable('test_table', 'job-123', data, 'tenant-123', ConfigType.PUSH);
+      await service.updateTable('test_table', 'job-123', IngestMode.APPEND, data, 'tenant-123', ConfigType.PUSH);
 
       const createTableCall = mockQuery.mock.calls.find((call) => (call[0] as string).includes('CREATE TABLE IF NOT EXISTS'));
       expect(createTableCall).toBeDefined();
@@ -327,31 +333,33 @@ describe('DatabaseService', () => {
       mockQuery.mockResolvedValue({} as QueryResult);
       const data = [{ a: 1 }, { a: 1 }];
 
-      await service.updateTable('test_table', 'job-123', data, 'tenant-123', ConfigType.PUSH);
+      await service.updateTable('test_table', 'job-123', IngestMode.APPEND, data, 'tenant-123', ConfigType.PUSH);
 
-      const storedProcCall = mockQuery.mock.calls.find((call) => (call[0] as string).includes('rotate_table_with_data'));
+      const insertCall = mockQuery.mock.calls.find((call) => (call[0] as string).includes('INSERT INTO test_table'));
 
-      const jsonData = JSON.parse(storedProcCall[1][1]);
-      expect(jsonData[0].checksum).toBe(jsonData[1].checksum);
+      const params = insertCall[1] as any[];
+      // params are [id1, data1, checksum1, job_id1, id2, data2, checksum2, job_id2]
+      expect(params[2]).toBe(params[6]); // checksums should be equal
     });
 
     it('should generate different checksums for different data', async () => {
       mockQuery.mockResolvedValue({} as QueryResult);
       const data = [{ a: 1 }, { a: 2 }];
 
-      await service.updateTable('test_table', 'job-123', data, 'tenant-123', ConfigType.PUSH);
+      await service.updateTable('test_table', 'job-123', IngestMode.APPEND, data, 'tenant-123', ConfigType.PUSH);
 
-      const storedProcCall = mockQuery.mock.calls.find((call) => (call[0] as string).includes('rotate_table_with_data'));
+      const insertCall = mockQuery.mock.calls.find((call) => (call[0] as string).includes('INSERT INTO test_table'));
 
-      const jsonData = JSON.parse(storedProcCall[1][1]);
-      expect(jsonData[0].checksum).not.toBe(jsonData[1].checksum);
+      const params = insertCall[1] as any[];
+      // params are [id1, data1, checksum1, job_id1, id2, data2, checksum2, job_id2]
+      expect(params[2]).not.toBe(params[6]); // checksums should be different
     });
 
     it('should pass ConfigType to insertRows', async () => {
       mockQuery.mockResolvedValue({} as QueryResult);
       const data = [{ key: 'value' }];
 
-      await service.updateTable('test_table', 'job-123', data, 'tenant-123', ConfigType.PULL);
+      await service.updateTable('test_table', 'job-123', IngestMode.APPEND, data, 'tenant-123', ConfigType.PULL);
 
       expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO job_history/i), expect.arrayContaining([ConfigType.PULL]));
     });

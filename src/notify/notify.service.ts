@@ -51,7 +51,7 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
   SELECT *
   FROM push_jobs
   WHERE 
-     status IN ('STATUS_08_DEPLOYED', 'STATUS_06_EXPORTED')
+     status IN ('STATUS_08_DEPLOYED', 'STATUS_06_EXPORTED','STATUS_04_APPROVED')
     AND publishing_status = 'active';
 `;
 

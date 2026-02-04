@@ -71,7 +71,14 @@ export class JobService {
         checksum: createHash('sha256').update(JSON.stringify(item)).digest('hex'),
       }));
 
-      await this.db.updateTable(`${endpoint.tenant_id}_${endpoint.table_name}`, endpoint.id, payload, endpoint.tenant_id, ConfigType.PUSH);
+      await this.db.updateTable(
+        `${endpoint.tenant_id}_${endpoint.table_name}`,
+        endpoint.id,
+        endpoint.mode,
+        payload,
+        endpoint.tenant_id,
+        ConfigType.PUSH,
+      );
 
       return {
         message: 'Data Enriched Successfully',

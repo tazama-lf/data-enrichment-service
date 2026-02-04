@@ -1,6 +1,7 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { LoggerService } from '@tazama-lf/frms-coe-lib';
-import { ConfigType } from '@tazama-lf/tcs-lib';
+import { ConfigType, IngestMode } from '@tazama-lf/tcs-lib';
 import { createHash } from 'node:crypto';
 import { Pool, QueryResult, QueryResultRow } from 'pg';
 import { v4 } from 'uuid';
@@ -8,12 +9,17 @@ import { v4 } from 'uuid';
 @Injectable()
 export class DatabaseService implements OnModuleDestroy {
   private readonly pool: Pool;
+  private readonly batchSize: number;
 
-  constructor(private readonly loggerService: LoggerService) {
+  constructor(
+    private readonly loggerService: LoggerService,
+    private readonly configService: ConfigService,
+  ) {
     this.pool = new Pool({
       connectionString: process.env.CONFIGURATION_DATABASE_URL,
       max: 10,
     });
+    this.batchSize = this.configService.get<number>('BATCH_SIZE', 1000);
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -58,6 +64,7 @@ export class DatabaseService implements OnModuleDestroy {
     tenantId: string,
     type: ConfigType,
   ): Promise<void> {
+    let processedCount = 0;
     try {
       if (rows.length === 0) {
         throw new Error('No data provided for insertion.');
@@ -71,11 +78,25 @@ export class DatabaseService implements OnModuleDestroy {
         throw new Error('No columns found in the data for insertion.');
       }
 
-      const query = 'CALL rotate_table_with_data($1, $2::jsonb)';
+      for (let i = 0; i < rows.length; i += this.batchSize) {
+        const batch = rows.slice(i, i + this.batchSize);
 
-      await this.query(query, [tableName, JSON.stringify(rows)]);
+        const placeholders = batch
+          .map((_, rowIndex) => `(${keys.map((_, colIndex) => `$${rowIndex * keys.length + colIndex + 1}`).join(', ')})`)
+          .join(', ');
 
-      await this.insertPullJobHistory(jobId, rows.length, rows.length, null, tenantId, type);
+        const values = batch.flatMap((row) => keys.map((k) => row[k]));
+
+        const insertQuery = `
+        INSERT INTO ${tableName} (${keys.join(', ')})
+        VALUES ${placeholders};
+      `;
+
+        await this.query(insertQuery, values);
+        processedCount += batch.length;
+      }
+
+      await this.insertPullJobHistory(jobId, rows.length, processedCount, null, tenantId, type);
 
       this.loggerService.log(`Successfully inserted ${rows.length} row(s) into "${tableName}".`);
     } catch (error: unknown) {
@@ -116,7 +137,7 @@ export class DatabaseService implements OnModuleDestroy {
     }
   }
 
-  async updateTable(tableName: string, jobId: string, data: unknown, tenantId: string, type: ConfigType): Promise<void> {
+  async updateTable(tableName: string, jobId: string, mode: IngestMode, data: unknown, tenantId: string, type: ConfigType): Promise<void> {
     await this.ensureTable(tableName);
     const arr = Array.isArray(data) ? data : Object.values(data as Record<string, unknown>).flat();
 
@@ -127,6 +148,12 @@ export class DatabaseService implements OnModuleDestroy {
       job_id: jobId,
     }));
 
-    await this.insertRows(tableName, rows, jobId, tenantId, type);
+    if (mode === IngestMode.APPEND) {
+      await this.insertRows(tableName, rows, jobId, tenantId, type);
+    } else {
+      const deleteQuery = `DELETE FROM ${tableName};`;
+      await this.query(deleteQuery);
+      await this.insertRows(tableName, rows, jobId, tenantId, type);
+    }
   }
 }

@@ -2,7 +2,7 @@ import { BadRequestException, InternalServerErrorException, NotFoundException } 
 import { ConfigService } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
-import { ConfigType, JobStatus, ScheduleStatus } from '@tazama-lf/tcs-lib';
+import { ConfigType, IngestMode, JobStatus, ScheduleStatus } from '@tazama-lf/tcs-lib';
 import type { Request } from 'express';
 import { DatabaseService } from '../../src/database/database.service';
 import type { CreateEnrichDataDto } from '../../src/job/dto/create-enrich-data.dto';
@@ -30,6 +30,7 @@ describe('JobService', () => {
     table_name: 'test_table',
     status: JobStatus.DEPLOYED,
     publishing_status: ScheduleStatus.ACTIVE,
+    mode: IngestMode.APPEND,
   };
 
   beforeEach(async () => {
@@ -106,6 +107,7 @@ describe('JobService', () => {
         expect(mockDatabaseService.updateTable).toHaveBeenCalledWith(
           'tenant_456_test_table',
           'endpoint-123',
+          IngestMode.APPEND,
           expect.arrayContaining([
             expect.objectContaining({
               data: { key: 'value', name: 'test' },
@@ -154,6 +156,7 @@ describe('JobService', () => {
         expect(mockDatabaseService.updateTable).toHaveBeenCalledWith(
           'tenant_456_test_table',
           'endpoint-123',
+          IngestMode.APPEND,
           expect.arrayContaining([
             expect.objectContaining({ data: { id: 1 } }),
             expect.objectContaining({ data: { id: 2 } }),
@@ -173,7 +176,7 @@ describe('JobService', () => {
 
         await service.createEnrich({ req: mockRequest as Request, body: arrayBody, tenantId: 'tenant_456' });
 
-        const callArgs = mockDatabaseService.updateTable.mock.calls[0][2] as Array<{
+        const callArgs = mockDatabaseService.updateTable.mock.calls[0][3] as Array<{
           checksum: string;
           data: Record<string, unknown>;
         }>;
@@ -187,7 +190,7 @@ describe('JobService', () => {
 
         await service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
 
-        const callArgs = mockDatabaseService.updateTable.mock.calls[0][2] as Array<{
+        const callArgs = mockDatabaseService.updateTable.mock.calls[0][3] as Array<{
           job_id: string;
         }>;
         expect(callArgs[0].job_id).toBe('endpoint-123');
@@ -201,6 +204,7 @@ describe('JobService', () => {
         expect(mockDatabaseService.updateTable).toHaveBeenCalledWith(
           'tenant_456_test_table',
           'endpoint-123',
+          IngestMode.APPEND,
           expect.any(Array),
           'tenant_456',
           ConfigType.PUSH,
@@ -416,7 +420,7 @@ describe('JobService', () => {
         const result = await service.createEnrich({ req: mockRequest as Request, body: complexBody, tenantId: 'tenant_456' });
 
         expect(result.success).toBe(true);
-        const callArgs = mockDatabaseService.updateTable.mock.calls[0][2] as Array<{
+        const callArgs = mockDatabaseService.updateTable.mock.calls[0][3] as Array<{
           data: Record<string, unknown>;
         }>;
         expect(callArgs[0].data).toEqual(complexBody.data);
@@ -436,7 +440,7 @@ describe('JobService', () => {
 
         await service.createEnrich({ req: mockRequest as Request, body: typedBody, tenantId: 'tenant_456' });
 
-        const callArgs = mockDatabaseService.updateTable.mock.calls[0][2] as Array<{
+        const callArgs = mockDatabaseService.updateTable.mock.calls[0][3] as Array<{
           data: Record<string, unknown>;
         }>;
         expect(callArgs[0].data).toEqual(typedBody.data);
@@ -451,7 +455,7 @@ describe('JobService', () => {
         const result = await service.createEnrich({ req: mockRequest as Request, body: emptyBody, tenantId: 'tenant_456' });
 
         expect(result.success).toBe(true);
-        const callArgs = mockDatabaseService.updateTable.mock.calls[0][2] as Array<{
+        const callArgs = mockDatabaseService.updateTable.mock.calls[0][3] as Array<{
           data: Record<string, unknown>;
         }>;
         expect(callArgs[0].data).toEqual({});
@@ -469,6 +473,7 @@ describe('JobService', () => {
         expect(mockDatabaseService.updateTable).toHaveBeenCalledWith(
           'tenant_456_test_table',
           'endpoint-123',
+          IngestMode.APPEND,
           [],
           'tenant_456',
           ConfigType.PUSH,
@@ -485,7 +490,7 @@ describe('JobService', () => {
         const result = await service.createEnrich({ req: mockRequest as Request, body: largeBody, tenantId: 'tenant_456' });
 
         expect(result.success).toBe(true);
-        const callArgs = mockDatabaseService.updateTable.mock.calls[0][2] as Array<{
+        const callArgs = mockDatabaseService.updateTable.mock.calls[0][3] as Array<{
           data: Record<string, unknown>;
         }>;
         expect(callArgs).toHaveLength(1000);
@@ -500,7 +505,7 @@ describe('JobService', () => {
 
         await service.createEnrich({ req: mockRequest as Request, body: arrayBody, tenantId: 'tenant_456' });
 
-        const callArgs = mockDatabaseService.updateTable.mock.calls[0][2] as Array<{
+        const callArgs = mockDatabaseService.updateTable.mock.calls[0][3] as Array<{
           checksum: string;
         }>;
         expect(callArgs[0].checksum).toBe(callArgs[1].checksum);
@@ -517,7 +522,7 @@ describe('JobService', () => {
 
         await service.createEnrich({ req: mockRequest as Request, body: arrayBody, tenantId: 'tenant_456' });
 
-        const callArgs = mockDatabaseService.updateTable.mock.calls[0][2] as Array<{
+        const callArgs = mockDatabaseService.updateTable.mock.calls[0][3] as Array<{
           checksum: string;
         }>;
         expect(callArgs[0].checksum).toBeDefined();
@@ -574,6 +579,7 @@ describe('JobService', () => {
         expect(mockDatabaseService.updateTable).toHaveBeenCalledWith(
           'tenant_456_test_table',
           'endpoint-123',
+          IngestMode.APPEND,
           expect.any(Array),
           'tenant_456',
           ConfigType.PUSH,
@@ -589,6 +595,7 @@ describe('JobService', () => {
         expect(mockDatabaseService.updateTable).toHaveBeenCalledWith(
           'endpoint_tenant_test_table',
           'endpoint-123',
+          IngestMode.APPEND,
           expect.any(Array),
           'endpoint_tenant',
           ConfigType.PUSH,
@@ -604,6 +611,7 @@ describe('JobService', () => {
         expect(mockDatabaseService.updateTable).toHaveBeenCalledWith(
           'tenant_456_test_table_2024',
           'endpoint-123',
+          IngestMode.APPEND,
           expect.any(Array),
           'tenant_456',
           ConfigType.PUSH,
