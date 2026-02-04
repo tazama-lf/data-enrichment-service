@@ -208,6 +208,7 @@ describe('ExecutorService', () => {
       expect(mockDatabaseService.updateTable).toHaveBeenCalledWith(
         'tenant-456_test_table',
         'job-123',
+        IngestMode.APPEND,
         { key: 'value' },
         'tenant-456',
         ConfigType.PULL,
@@ -232,6 +233,7 @@ describe('ExecutorService', () => {
       expect(mockDatabaseService.updateTable).toHaveBeenCalledWith(
         'tenant-456_test_table',
         'job-123',
+        IngestMode.APPEND,
         [{ id: 1 }, { id: 2 }],
         'tenant-456',
         ConfigType.PULL,
@@ -419,6 +421,7 @@ describe('ExecutorService', () => {
       expect(mockDatabaseService.updateTable).toHaveBeenCalledWith(
         'tenant-456_test_table',
         'job-123',
+        IngestMode.APPEND,
         [{ key: 'value' }],
         'tenant-456',
         ConfigType.PULL,
