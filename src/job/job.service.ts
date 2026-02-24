@@ -42,19 +42,13 @@ export class JobService {
         }
         this.loggerService.log(`Using endpoint from cache: ${path}`);
       } else {
-        const query = `
-      SELECT *
-      FROM push_jobs
-      WHERE path = $1 AND tenant_id = $2
-      LIMIT 1;
-    `;
-        const { rows } = await this.db.query<PushJob>(query, [path, tenantId]);
+        const result = await this.db.getPushJobByPath(path, tenantId);
 
-        if (!rows.length) {
+        if (!result) {
           throw new NotFoundException(`Endpoint ${path} does not exist with tenant_id ${tenantId}`);
         }
 
-        endpoint = rows[0]!;
+        endpoint = result as unknown as PushJob;
 
         await this.redis.setJson(path, JSON.stringify(endpoint), this.cacheTtl);
         this.loggerService.log(`Cached endpoint for path: ${path}`);

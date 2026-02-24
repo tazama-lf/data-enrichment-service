@@ -71,14 +71,18 @@ export class ExecutorService {
   @ApmSpan('data-pull-http')
   async handleHttpJob(job: Job, jobKey: string): Promise<void> {
     const httpCon = job.connection as HTTPConnection;
+    const httpTimeout = this.configService.get<number>('HTTP_TIMEOUT', 30000);
+
     const { data, status } = await firstValueFrom(
       this.httpService.get<unknown>(httpCon.url, {
         headers: httpCon.headers,
-        timeout: this.configService.get<number>('HTTP_TIMEOUT', 30000),
+        timeout: httpTimeout,
       }),
     );
 
-    if (status >= 200 && status < 300 && data !== null && typeof data === 'object') {
+    const isSuccessfulResponse = status >= 200 && status < 300 && data !== null && typeof data === 'object';
+
+    if (isSuccessfulResponse) {
       await this.db.updateTable(`${job.tenant_id}_${job.table_name}`, job.id, job.mode, data, job.tenant_id, ConfigType.PULL);
       await this.redis.set(jobKey, 0, this.cacheTtl);
     } else {

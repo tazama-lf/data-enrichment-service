@@ -1,59 +1,200 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { LoggerService } from '@tazama-lf/frms-coe-lib';
+import {
+  type ConfigurationDB,
+  CreateDatabaseManager,
+  type DatabaseManagerInstance,
+  type EnrichmentDB,
+  LoggerService,
+  type ManagerConfig,
+} from '@tazama-lf/frms-coe-lib';
 import { ConfigType, IngestMode } from '@tazama-lf/tcs-lib';
 import { createHash } from 'node:crypto';
-import { Pool, QueryResult, QueryResultRow } from 'pg';
 import { v4 } from 'uuid';
+import { ErrorPattern } from '../utils/common';
 
 @Injectable()
-export class DatabaseService implements OnModuleDestroy {
-  private readonly pool: Pool;
+export class DatabaseService implements OnModuleInit {
+  private DbManager: (DatabaseManagerInstance<ManagerConfig> & ConfigurationDB & EnrichmentDB) | null = null;
   private readonly batchSize: number;
 
   constructor(
     private readonly loggerService: LoggerService,
     private readonly configService: ConfigService,
   ) {
-    this.pool = new Pool({
-      connectionString: process.env.CONFIGURATION_DATABASE_URL,
-      max: 10,
-    });
     this.batchSize = this.configService.get<number>('BATCH_SIZE', 1000);
   }
 
-  async onModuleDestroy(): Promise<void> {
-    await this.pool.end();
-    this.loggerService.log('Database pool closed');
+  async onModuleInit(): Promise<void> {
+    await this.initDb();
   }
 
-  async query<T extends QueryResultRow = QueryResultRow>(sql: string, params?: unknown[]): Promise<QueryResult<T>> {
-    const result = await this.pool.query(sql, params);
-    return result;
-  }
-
-  private async insertPullJobHistory(
-    jobId: string,
-    counts: number,
-    processedCounts: number,
-    exception: string | null,
-    tenantId: string,
-    type: ConfigType,
-  ): Promise<void> {
-    const query = `
-    INSERT INTO job_history (tenant_id, job_id, counts, processed_counts, exception,job_type)
-    VALUES ($1, $2, $3, $4, $5, $6);
-  `;
-
-    const params = [tenantId, jobId, counts, processedCounts, exception, type];
-
+  private async initDb(): Promise<void> {
     try {
-      await this.query(query, params);
-      this.loggerService.log(`Inserted job history for jobId: ${jobId}`);
+      const config: ManagerConfig = {
+        configuration: {
+          host: process.env.DB_HOST ?? '10.10.80.37',
+          port: parseInt(process.env.DB_PORT ?? '5432'),
+          databaseName: process.env.DB_NAME ?? 'configuration',
+          user: process.env.DB_USER ?? 'postgres',
+          password: process.env.DB_PASSWORD ?? 'postgres',
+          certPath: process.env.DB_CERT_PATH ?? '',
+        },
+        enrichment: {
+          host: process.env.DB_HOST ?? '10.10.80.37',
+          port: parseInt(process.env.DB_PORT ?? '5432'),
+          databaseName: process.env.DB_NAME ?? 'enrichment',
+          user: process.env.DB_USER ?? 'postgres',
+          password: process.env.DB_PASSWORD ?? 'postgres',
+          certPath: process.env.DB_CERT_PATH ?? '',
+        },
+      };
+
+      this.DbManager = (await CreateDatabaseManager(config)) as DatabaseManagerInstance<ManagerConfig> & ConfigurationDB & EnrichmentDB;
+      this.loggerService.log('Database manager initialized successfully', this.log_context);
     } catch (error) {
-      const message = error instanceof Error ? error.message : JSON.stringify(error);
-      this.loggerService.error(`Failed to insert job_history: ${message}`);
-      throw Error(message);
+      this.loggerService.error(`Failed to initialize Database manager: ${String(error)}`, this.log_context);
+    }
+  }
+
+  private readonly log_context = DatabaseService.name;
+  ERROR_PATTERNS: ErrorPattern[] = [
+    {
+      pattern: 'unique constraint',
+      exception: ConflictException,
+      log: 'warn',
+      getMessage: (context: string, additionalInfo?: Record<string, unknown>) => {
+        const details = additionalInfo?.details
+          ? typeof additionalInfo.details === 'string'
+            ? additionalInfo.details
+            : JSON.stringify(additionalInfo.details)
+          : '';
+        return `Duplicate ${context}: ${details}`;
+      },
+    },
+    {
+      pattern: 'foreign key constraint',
+      exception: BadRequestException,
+      log: 'error',
+      getMessage: (context: string, additionalInfo?: Record<string, unknown>) => {
+        const details = additionalInfo?.details
+          ? typeof additionalInfo.details === 'string'
+            ? additionalInfo.details
+            : JSON.stringify(additionalInfo.details)
+          : '';
+        return `Invalid reference in ${context}: ${details}`;
+      },
+    },
+    {
+      pattern: 'invalid input syntax',
+      exception: BadRequestException,
+      log: 'error',
+      getMessage: (context: string) => `Invalid data format in ${context}`,
+    },
+    {
+      pattern: 'connection',
+      exception: InternalServerErrorException,
+      log: 'error',
+      getMessage: (context: string) => `Database connection failed while ${context}`,
+    },
+    {
+      pattern: 'disk full',
+      exception: InternalServerErrorException,
+      log: 'error',
+      getMessage: (context: string) => `Insufficient storage space while ${context}`,
+    },
+    {
+      pattern: 'relation',
+      condition: (msg: string) => msg.includes('relation') && msg.includes('does not exist'),
+      exception: BadRequestException,
+      log: 'error',
+      getMessage: (context: string) => `Table does not exist for ${context}`,
+    },
+    {
+      pattern: 'duplicate key',
+      exception: ConflictException,
+      log: 'warn',
+      getMessage: (context: string) => `Duplicate entry in ${context}`,
+    },
+  ];
+
+  private handleDatabaseError(error: unknown, context: string, additionalInfo?: Record<string, unknown>): never {
+    const errorMessage = String(error);
+
+    for (const errorPattern of this.ERROR_PATTERNS) {
+      const matches = errorPattern.condition ? errorPattern.condition(errorMessage) : errorMessage.includes(errorPattern.pattern);
+
+      if (matches) {
+        const message = errorPattern.getMessage(context, additionalInfo);
+        const logMsg = `${context}: ${message} - ${errorMessage}`;
+        if (errorPattern.log === 'warn') this.loggerService.warn(logMsg, this.log_context);
+        else this.loggerService.error(logMsg, this.log_context);
+        const ExceptionConstructor = errorPattern.exception;
+        throw new ExceptionConstructor(message);
+      }
+    }
+
+    this.loggerService.error(`${context}: Unexpected error - ${errorMessage}`, this.log_context);
+    throw new InternalServerErrorException(`Failed to ${context}`);
+  }
+
+  async getPushJobByPath(path: string, tenantId: string): Promise<Record<string, unknown> | undefined> {
+    try {
+      if (!this.DbManager) {
+        throw new InternalServerErrorException('Database manager not initialized - database operation cannot proceed');
+      }
+
+      this.loggerService.log(`Getting Push job: ${path} for tenant: ${tenantId}`, this.log_context);
+      return await this.DbManager.getPathPushJob(path, tenantId);
+    } catch (error) {
+      this.handleDatabaseError(error, 'push job', {
+        details: `push job ${path} for tenant ${tenantId}`,
+      });
+    }
+  }
+
+  async getDefaultPushJob(): Promise<Array<Record<string, unknown>>> {
+    try {
+      if (!this.DbManager) {
+        throw new InternalServerErrorException('Database manager not initialized - database operation cannot proceed');
+      }
+
+      this.loggerService.log('Getting default Push job', this.log_context);
+      return await this.DbManager.getDefaultPushJob();
+    } catch (error) {
+      this.handleDatabaseError(error, 'push job', {
+        details: 'push job',
+      });
+    }
+  }
+
+  async getPushJobById(type: ConfigType, id: string): Promise<Record<string, unknown> | undefined> {
+    try {
+      if (!this.DbManager) {
+        throw new InternalServerErrorException('Database manager not initialized - database operation cannot proceed');
+      }
+
+      this.loggerService.log(`Getting Push job for id: ${id}`, this.log_context);
+      return await this.DbManager.getIdPushJob(type, id);
+    } catch (error) {
+      this.handleDatabaseError(error, 'push job', {
+        details: `push job for tenant ${id}`,
+      });
+    }
+  }
+
+  async getPushJob(path: string, tenantId: string): Promise<Record<string, unknown> | undefined> {
+    try {
+      if (!this.DbManager) {
+        throw new InternalServerErrorException('Database manager not initialized - database operation cannot proceed');
+      }
+
+      this.loggerService.log(`Getting Push job: ${path} for tenant: ${tenantId}`, this.log_context);
+      return await this.DbManager.getPathPushJob(path, tenantId);
+    } catch (error) {
+      this.handleDatabaseError(error, 'push job', {
+        details: `push job ${path} for tenant ${tenantId}`,
+      });
     }
   }
 
@@ -66,17 +207,20 @@ export class DatabaseService implements OnModuleDestroy {
   ): Promise<void> {
     let processedCount = 0;
     try {
+      if (!this.DbManager) {
+        throw new InternalServerErrorException('Database manager not initialized - database operation cannot proceed');
+      }
+
       if (rows.length === 0) {
         throw new Error('No data provided for insertion.');
       }
 
-      this.loggerService.log(`Inserting rows with length ${rows.length}`);
-
       const keys = Object.keys(rows[0]);
-
       if (keys.length === 0) {
         throw new Error('No columns found in the data for insertion.');
       }
+
+      this.loggerService.log(`Inserting ${rows.length} rows with ${keys.length} columns`);
 
       for (let i = 0; i < rows.length; i += this.batchSize) {
         const batch = rows.slice(i, i + this.batchSize);
@@ -92,7 +236,7 @@ export class DatabaseService implements OnModuleDestroy {
         VALUES ${placeholders};
       `;
 
-        await this.query(insertQuery, values);
+        await this.DbManager.ingestData(insertQuery, values);
         processedCount += batch.length;
       }
 
@@ -108,24 +252,41 @@ export class DatabaseService implements OnModuleDestroy {
     }
   }
 
+  async insertPullJobHistory(
+    jobId: string,
+    counts: number,
+    processedCounts: number,
+    exception: string | null,
+    tenantId: string,
+    type: ConfigType,
+  ): Promise<void> {
+    try {
+      if (!this.DbManager) {
+        throw new InternalServerErrorException('Database manager not initialized - database operation cannot proceed');
+      }
+
+      await this.DbManager.insertJobHistory(tenantId, jobId, counts, processedCounts, exception, type);
+      this.loggerService.log(`Inserted job history for jobId: ${jobId}`, this.log_context);
+    } catch (error) {
+      this.handleDatabaseError(error, 'insert job history', {
+        details: `jobId ${jobId} for tenant ${tenantId}`,
+      });
+    }
+  }
+
   async ensureTable(tableName: string): Promise<void> {
     try {
+      if (!this.DbManager) {
+        throw new InternalServerErrorException('Database manager not initialized - database operation cannot proceed');
+      }
+
       if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(tableName)) {
         throw new Error(`Invalid table name: ${tableName}`);
       }
 
       const safeTableName = `"${tableName.replace(/"/g, '""')}"`;
 
-      const createQuery = `
-        CREATE TABLE IF NOT EXISTS ${safeTableName} (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          data JSONB NOT NULL,
-          job_id TEXT NOT NULL,
-          checksum TEXT NOT NULL,
-          created_at TIMESTAMP NOT NULL DEFAULT NOW()
-        );
-      `;
-      await this.query(createQuery);
+      await this.DbManager.createTable(safeTableName);
       this.loggerService.log(`Table "${tableName}" created or already exists.`);
     } catch (error: unknown) {
       if (error instanceof Error) {
@@ -138,22 +299,34 @@ export class DatabaseService implements OnModuleDestroy {
   }
 
   async updateTable(tableName: string, jobId: string, mode: IngestMode, data: unknown, tenantId: string, type: ConfigType): Promise<void> {
-    await this.ensureTable(tableName);
-    const arr = Array.isArray(data) ? data : Object.values(data as Record<string, unknown>).flat();
+    try {
+      if (!this.DbManager) {
+        throw new InternalServerErrorException('Database manager not initialized - database operation cannot proceed');
+      }
 
-    const rows = arr.map((item) => ({
-      id: v4(),
-      data: JSON.stringify(item),
-      checksum: createHash('sha256').update(JSON.stringify(item)).digest('hex'),
-      job_id: jobId,
-    }));
+      await this.ensureTable(tableName);
+      const arr = Array.isArray(data) ? data : Object.values(data as Record<string, unknown>).flat();
 
-    if (mode === IngestMode.APPEND) {
-      await this.insertRows(tableName, rows, jobId, tenantId, type);
-    } else {
-      const deleteQuery = `DELETE FROM ${tableName};`;
-      await this.query(deleteQuery);
-      await this.insertRows(tableName, rows, jobId, tenantId, type);
+      const rows = arr.map((item) => ({
+        id: v4(),
+        data: JSON.stringify(item),
+        checksum: createHash('sha256').update(JSON.stringify(item)).digest('hex'),
+        job_id: jobId,
+      }));
+
+      if (mode === IngestMode.APPEND) {
+        await this.insertRows(tableName, rows, jobId, tenantId, type);
+      } else {
+        await this.DbManager.deleteRows(tableName);
+        await this.insertRows(tableName, rows, jobId, tenantId, type);
+      }
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        this.loggerService.error(`Error while updating table "${tableName}": ${error.message}`);
+      } else {
+        this.loggerService.error(`Unknown error while updating table "${tableName}": ${JSON.stringify(error)}`);
+      }
+      throw error;
     }
   }
 }
