@@ -6,7 +6,6 @@ import { LoggerService } from '@tazama-lf/frms-coe-lib';
 import { ConfigType, IngestMode } from '@tazama-lf/tcs-lib';
 import { DatabaseService } from '../../src/database/database.service';
 
-// Mock the CreateDatabaseManager function
 jest.mock('@tazama-lf/frms-coe-lib', () => ({
   ...jest.requireActual('@tazama-lf/frms-coe-lib'),
   CreateDatabaseManager: jest.fn(),
@@ -58,12 +57,10 @@ describe('DatabaseService', () => {
 
     service = module.get<DatabaseService>(DatabaseService);
 
-    // Ensure onModuleInit completes
     await service.onModuleInit();
   });
 
   afterEach(() => {
-    // Clear mock call history only, not implementations
     mockLoggerService.log.mockClear();
     mockLoggerService.error.mockClear();
     mockLoggerService.warn.mockClear();
@@ -125,7 +122,6 @@ describe('DatabaseService', () => {
     });
 
     it('should throw InternalServerErrorException when database manager is not initialized', async () => {
-      // Create a service without initializing DbManager
       CreateDatabaseManager.mockRejectedValueOnce(new Error('Init failed'));
       const module: TestingModule = await Test.createTestingModule({
         providers: [
@@ -292,7 +288,6 @@ describe('DatabaseService', () => {
 
       await service.insertRows('test_table', largeRows, 'job-123', 'tenant-123', ConfigType.PULL);
 
-      // With batch size of 1000, should be called 3 times (1000, 1000, 500)
       expect(mockDbManager.ingestData).toHaveBeenCalledTimes(3);
       expect(mockDbManager.insertJobHistory).toHaveBeenCalledWith('tenant-123', 'job-123', 2500, 2500, null, ConfigType.PULL);
     });
@@ -428,7 +423,6 @@ describe('DatabaseService', () => {
     ];
 
     it('should update table in REPLACE mode', async () => {
-      // Create fresh mocks for this test
       const testMockDbManager = {
         getPathPushJob: jest.fn().mockResolvedValue(undefined),
         getDefaultPushJob: jest.fn().mockResolvedValue([]),
