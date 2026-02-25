@@ -22,12 +22,13 @@
     "forceConsistentCasingInFileNames": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "useDefineForClassFields": false
+    "useDefineForClassFields": false,
+    "types": ["jest", "node"]
   },
   "include": [
     "src/**/*",
-    "test/job/job.service.spec.ts"
-, "test/executor/executor.service.spec.ts", "test/database/database.service.spec.ts"  ],
+    "test/**/*.spec.ts"
+  ],
   "exclude": [
     "node_modules",
     "dist"

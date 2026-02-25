@@ -73,7 +73,8 @@ describe('NotifyService', () => {
     } as unknown as jest.Mocked<RedisService>;
 
     mockDatabaseService = {
-      query: jest.fn(),
+      getDefaultPushJob: jest.fn(),
+      getPushJobById: jest.fn(),
       updateTable: jest.fn().mockResolvedValue(undefined),
       ensureTable: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<DatabaseService>;
@@ -133,10 +134,7 @@ describe('NotifyService', () => {
   describe('onModuleInit', () => {
     it('should initialize NATS service and preload cache successfully', async () => {
       const mockPushJobs = [mockPushJob, { ...mockPushJob, id: 'push-456', path: '/api/another-endpoint' }];
-      mockDatabaseService.query.mockResolvedValue({
-        rows: mockPushJobs,
-        rowCount: 2,
-      } as QueryResult);
+      mockDatabaseService.getDefaultPushJob.mockResolvedValue(mockPushJobs as unknown as Record<string, unknown>[]);
 
       await service.onModuleInit();
 
@@ -147,20 +145,14 @@ describe('NotifyService', () => {
         'config.notification.response',
       );
       expect(mockLoggerService.log).toHaveBeenCalledWith('NATS consumer initialized for config.notification');
-      expect(mockDatabaseService.query).toHaveBeenCalledWith(expect.stringMatching(/SELECT\s+\*\s+FROM\s+push_jobs/i));
+      expect(mockDatabaseService.getDefaultPushJob).toHaveBeenCalled();
       expect(mockRedisService.setJson).toHaveBeenCalledTimes(2);
       expect(mockRedisService.setJson).toHaveBeenCalledWith('/api/push-endpoint', JSON.stringify(mockPushJob), 86400);
       expect(mockLoggerService.log).toHaveBeenCalledWith('Cache preloaded: 2 configurations');
     });
 
     it('should handle empty push jobs result', async () => {
-      mockDatabaseService.query.mockResolvedValue({
-        command: 'SELECT',
-        rowCount: 0,
-        oid: 0,
-        rows: [],
-        fields: [],
-      } as QueryResult);
+      mockDatabaseService.getDefaultPushJob.mockResolvedValue([]);
 
       await service.onModuleInit();
 
@@ -170,10 +162,7 @@ describe('NotifyService', () => {
     });
 
     it('should not initialize if already initialized', async () => {
-      mockDatabaseService.query.mockResolvedValue({
-        rows: [mockPushJob],
-        rowCount: 1,
-      } as QueryResult);
+      mockDatabaseService.getDefaultPushJob.mockResolvedValue([mockPushJob] as unknown as Record<string, unknown>[]);
 
       await service.onModuleInit();
       await service.onModuleInit();
@@ -192,7 +181,7 @@ describe('NotifyService', () => {
 
     it('should handle database query failure', async () => {
       const error = new Error('Database query failed');
-      mockDatabaseService.query.mockRejectedValue(error);
+      mockDatabaseService.getDefaultPushJob.mockRejectedValue(error);
 
       await expect(service.onModuleInit()).rejects.toThrow('Database query failed');
       expect(mockLoggerService.error).toHaveBeenCalledWith('Failed to initialize ConfigNotifyService: Error: Database query failed');
@@ -224,18 +213,12 @@ describe('NotifyService', () => {
         }),
       };
 
-      mockDatabaseService.query.mockResolvedValue({
-        rows: [mockPushJob],
-        rowCount: 1,
-      } as QueryResult);
+      mockDatabaseService.getPushJobById.mockResolvedValue(mockPushJob as unknown as Record<string, unknown>);
 
       await service.handleNatsMessage(reqObj, handleResponse);
 
       expect(mockLoggerService.log).toHaveBeenCalledWith(expect.stringContaining('RECEIVING MESSAGE'));
-      expect(mockDatabaseService.query).toHaveBeenCalledWith(
-        expect.stringMatching(/SELECT\s+\*\s+FROM\s+push_jobs\s+WHERE\s+id\s*=\s*\$1/is),
-        ['push-123'],
-      );
+      expect(mockDatabaseService.getPushJobById).toHaveBeenCalledWith(ConfigType.PUSH, 'push-123');
       expect(mockRedisService.setJson).toHaveBeenCalledWith('/api/push-endpoint', JSON.stringify(mockPushJob), 86400);
       expect(mockLoggerService.log).toHaveBeenCalledWith('Updated cache for key: /api/push-endpoint');
       expect(handleResponse).toHaveBeenCalledWith({
@@ -256,10 +239,7 @@ describe('NotifyService', () => {
       };
 
       const pushJobWithNullPath = { ...mockPushJob, path: null };
-      mockDatabaseService.query.mockResolvedValue({
-        rows: [pushJobWithNullPath],
-        rowCount: 1,
-      } as QueryResult);
+      mockDatabaseService.getPushJobById.mockResolvedValue(pushJobWithNullPath as unknown as Record<string, unknown>);
 
       await service.handleNatsMessage(reqObj, handleResponse);
 
@@ -277,16 +257,11 @@ describe('NotifyService', () => {
         }),
       };
 
-      mockDatabaseService.query.mockResolvedValue({
-        rows: [mockPullJob],
-        rowCount: 1,
-      } as QueryResult);
+      mockDatabaseService.getPushJobById.mockResolvedValue(mockPullJob as unknown as Record<string, unknown>);
 
       await service.handleNatsMessage(reqObj, handleResponse);
 
-      expect(mockDatabaseService.query).toHaveBeenCalledWith(expect.stringMatching(/SELECT.*FROM pull_jobs.*LEFT JOIN cron_jobs/is), [
-        'pull-123',
-      ]);
+      expect(mockDatabaseService.getPushJobById).toHaveBeenCalledWith(ConfigType.PULL, 'pull-123');
       expect(mockExecutorService.addCronJob).toHaveBeenCalledWith(mockPullJob);
       expect(mockExecutorService.deleteCronJob).not.toHaveBeenCalled();
       expect(handleResponse).toHaveBeenCalledWith({
@@ -311,10 +286,7 @@ describe('NotifyService', () => {
         publishing_status: ScheduleStatus.INACTIVE,
       };
 
-      mockDatabaseService.query.mockResolvedValue({
-        rows: [pullJobNoSchedule],
-        rowCount: 1,
-      } as QueryResult);
+      mockDatabaseService.getPushJobById.mockResolvedValue(pullJobNoSchedule as unknown as Record<string, unknown>);
 
       await service.handleNatsMessage(reqObj, handleResponse);
 
@@ -337,10 +309,7 @@ describe('NotifyService', () => {
         publishing_status: ScheduleStatus.INACTIVE,
       };
 
-      mockDatabaseService.query.mockResolvedValue({
-        rows: [pullJobNoSchedule],
-        rowCount: 1,
-      } as QueryResult);
+      mockDatabaseService.getPushJobById.mockResolvedValue(pullJobNoSchedule as unknown as Record<string, unknown>);
 
       await service.handleNatsMessage(reqObj, handleResponse);
 
@@ -360,7 +329,7 @@ describe('NotifyService', () => {
       };
 
       const error = new Error('Database connection failed');
-      mockDatabaseService.query.mockRejectedValue(error);
+      mockDatabaseService.getPushJobById.mockRejectedValue(error);
 
       await service.handleNatsMessage(reqObj, handleResponse);
 
@@ -382,7 +351,7 @@ describe('NotifyService', () => {
         }),
       };
 
-      mockDatabaseService.query.mockRejectedValue('String error');
+      mockDatabaseService.getPushJobById.mockRejectedValue('String error');
 
       await service.handleNatsMessage(reqObj, handleResponse);
 
@@ -421,10 +390,7 @@ describe('NotifyService', () => {
         }),
       };
 
-      mockDatabaseService.query.mockResolvedValue({
-        rows: [mockPushJob],
-        rowCount: 1,
-      } as QueryResult);
+      mockDatabaseService.getPushJobById.mockResolvedValue(mockPushJob as unknown as Record<string, unknown>);
 
       const error = new Error('Redis connection failed');
       mockRedisService.setJson.mockRejectedValue(error);
@@ -449,10 +415,7 @@ describe('NotifyService', () => {
         }),
       };
 
-      mockDatabaseService.query.mockResolvedValue({
-        rows: [mockPullJob],
-        rowCount: 1,
-      } as QueryResult);
+      mockDatabaseService.getPushJobById.mockResolvedValue(mockPullJob as unknown as Record<string, unknown>);
 
       const error = new Error('Failed to add cron job');
       mockExecutorService.addCronJob.mockRejectedValue(error);
@@ -476,12 +439,15 @@ describe('NotifyService', () => {
         }),
       };
 
+      mockDatabaseService.getPushJobById.mockResolvedValue(undefined);
+
       await service.handleNatsMessage(reqObj, handleResponse);
 
-      expect(mockLoggerService.error).toHaveBeenCalled();
+      expect(mockLoggerService.warn).toHaveBeenCalledWith('No record found for endpointId: undefined');
       expect(handleResponse).toHaveBeenCalledWith(
         expect.objectContaining({
           status: 'NACK',
+          error: 'Record not found for endpointId: undefined',
         }),
       );
     });
@@ -494,12 +460,15 @@ describe('NotifyService', () => {
         }),
       };
 
+      mockDatabaseService.getPushJobById.mockResolvedValue(undefined);
+
       await service.handleNatsMessage(reqObj, handleResponse);
 
-      expect(mockLoggerService.error).toHaveBeenCalled();
+      expect(mockLoggerService.warn).toHaveBeenCalledWith('No record found for endpointId: push-123');
       expect(handleResponse).toHaveBeenCalledWith(
         expect.objectContaining({
           status: 'NACK',
+          error: 'Record not found for endpointId: push-123',
         }),
       );
     });
@@ -521,15 +490,9 @@ describe('NotifyService', () => {
         }),
       };
 
-      mockDatabaseService.query
-        .mockResolvedValueOnce({
-          rows: [mockPushJob],
-          rowCount: 1,
-        } as QueryResult)
-        .mockResolvedValueOnce({
-          rows: [mockPullJob],
-          rowCount: 1,
-        } as QueryResult);
+      mockDatabaseService.getPushJobById
+        .mockResolvedValueOnce(mockPushJob as unknown as Record<string, unknown>)
+        .mockResolvedValueOnce(mockPullJob as unknown as Record<string, unknown>);
 
       await Promise.all([service.handleNatsMessage(reqObj1, handleResponse), service.handleNatsMessage(reqObj2, handleResponse)]);
 
@@ -547,10 +510,7 @@ describe('NotifyService', () => {
         }),
       };
 
-      mockDatabaseService.query.mockResolvedValue({
-        rows: [mockPushJob],
-        rowCount: 1,
-      } as QueryResult);
+      mockDatabaseService.getPushJobById.mockResolvedValue(mockPushJob as unknown as Record<string, unknown>);
 
       service.onModuleDestroy();
       await service.handleNatsMessage(reqObj, handleResponse);

@@ -1,25 +1,14 @@
+import { BadRequestException, ConflictException, InternalServerErrorException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { DatabaseService } from '../../src/database/database.service';
+import type { ConfigurationDB, DatabaseManagerInstance, EnrichmentDB, ManagerConfig } from '@tazama-lf/frms-coe-lib';
 import { LoggerService } from '@tazama-lf/frms-coe-lib';
-import { type QueryResult } from 'pg';
-import { ConfigType } from '@tazama-lf/tcs-lib';
+import { ConfigType, IngestMode } from '@tazama-lf/tcs-lib';
+import { DatabaseService } from '../../src/database/database.service';
 
-const mockQuery = jest.fn();
-const mockConnect = jest.fn();
-const mockEnd = jest.fn();
-
-jest.mock('pg', () => {
-  return {
-    Pool: jest.fn().mockImplementation(() => ({
-      query: mockQuery,
-      connect: mockConnect,
-      end: mockEnd,
-    })),
-  };
-});
-
-jest.mock('uuid', () => ({
-  v4: jest.fn(() => 'test-uuid-123'),
+jest.mock('@tazama-lf/frms-coe-lib', () => ({
+  ...jest.requireActual('@tazama-lf/frms-coe-lib'),
+  CreateDatabaseManager: jest.fn(),
 }));
 
 jest.mock('../../src/apm/apm.decorators', () => ({
@@ -29,10 +18,12 @@ jest.mock('../../src/apm/apm.decorators', () => ({
 describe('DatabaseService', () => {
   let service: DatabaseService;
   let mockLoggerService: jest.Mocked<LoggerService>;
+  let mockConfigService: jest.Mocked<ConfigService>;
+  let mockDbManager: jest.Mocked<DatabaseManagerInstance<ManagerConfig> & ConfigurationDB & EnrichmentDB>;
+
+  const { CreateDatabaseManager } = require('@tazama-lf/frms-coe-lib');
 
   beforeEach(async () => {
-    jest.clearAllMocks();
-
     mockLoggerService = {
       log: jest.fn(),
       error: jest.fn(),
@@ -40,320 +31,444 @@ describe('DatabaseService', () => {
       debug: jest.fn(),
     } as unknown as jest.Mocked<LoggerService>;
 
+    mockConfigService = {
+      get: jest.fn().mockReturnValue(1000),
+    } as unknown as jest.Mocked<ConfigService>;
+
+    mockDbManager = {
+      getPathPushJob: jest.fn().mockResolvedValue(undefined),
+      getDefaultPushJob: jest.fn().mockResolvedValue([]),
+      getIdPushJob: jest.fn().mockResolvedValue(undefined),
+      ingestData: jest.fn().mockResolvedValue(undefined),
+      insertJobHistory: jest.fn().mockResolvedValue(undefined),
+      createTable: jest.fn().mockResolvedValue(undefined),
+      deleteRows: jest.fn().mockResolvedValue(undefined),
+    } as unknown as jest.Mocked<DatabaseManagerInstance<ManagerConfig> & ConfigurationDB & EnrichmentDB>;
+
+    CreateDatabaseManager.mockResolvedValue(mockDbManager);
+
     const module: TestingModule = await Test.createTestingModule({
-      providers: [DatabaseService, { provide: LoggerService, useValue: mockLoggerService }],
+      providers: [
+        DatabaseService,
+        { provide: LoggerService, useValue: mockLoggerService },
+        { provide: ConfigService, useValue: mockConfigService },
+      ],
     }).compile();
 
     service = module.get<DatabaseService>(DatabaseService);
+
+    await service.onModuleInit();
+  });
+
+  afterEach(() => {
+    mockLoggerService.log.mockClear();
+    mockLoggerService.error.mockClear();
+    mockLoggerService.warn.mockClear();
+    mockLoggerService.debug.mockClear();
+    mockDbManager.getPathPushJob.mockClear();
+    mockDbManager.getDefaultPushJob.mockClear();
+    mockDbManager.getIdPushJob.mockClear();
+    mockDbManager.ingestData.mockClear();
+    mockDbManager.insertJobHistory.mockClear();
+    mockDbManager.createTable.mockClear();
+    mockDbManager.deleteRows.mockClear();
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
-  describe('query', () => {
-    it('should execute query without parameters', async () => {
-      const mockResult = { rows: [{ id: 1 }], rowCount: 1 } as QueryResult;
-      mockQuery.mockResolvedValue(mockResult);
-
-      const result = await service.query('SELECT * FROM test');
-
-      expect(mockQuery).toHaveBeenCalledWith('SELECT * FROM test', undefined);
-      expect(result).toEqual(mockResult);
+  describe('onModuleInit', () => {
+    it('should initialize database manager successfully', async () => {
+      expect(CreateDatabaseManager).toHaveBeenCalled();
+      expect(mockLoggerService.log).toHaveBeenCalledWith('Database manager initialized successfully', 'DatabaseService');
     });
 
-    it('should execute query with parameters', async () => {
-      const mockResult = { rows: [{ id: 1, name: 'test' }], rowCount: 1 } as QueryResult;
-      mockQuery.mockResolvedValue(mockResult);
+    it('should log error if database initialization fails', async () => {
+      const mockLogger = {
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        debug: jest.fn(),
+      } as unknown as jest.Mocked<LoggerService>;
 
-      const result = await service.query('SELECT * FROM test WHERE id = $1', [1]);
+      CreateDatabaseManager.mockRejectedValueOnce(new Error('Connection failed'));
 
-      expect(mockQuery).toHaveBeenCalledWith('SELECT * FROM test WHERE id = $1', [1]);
-      expect(result).toEqual(mockResult);
-    });
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          DatabaseService,
+          { provide: LoggerService, useValue: mockLogger },
+          { provide: ConfigService, useValue: mockConfigService },
+        ],
+      }).compile();
 
-    it('should handle query errors', async () => {
-      mockQuery.mockRejectedValue(new Error('Query failed'));
+      const newService = module.get<DatabaseService>(DatabaseService);
+      await newService.onModuleInit();
 
-      await expect(service.query('INVALID SQL')).rejects.toThrow('Query failed');
-    });
-
-    it('should return typed results', async () => {
-      interface TestRow {
-        id: number;
-        name: string;
-      }
-      const mockResult = {
-        rows: [{ id: 1, name: 'test' }],
-        rowCount: 1,
-      } as QueryResult<TestRow>;
-      mockQuery.mockResolvedValue(mockResult);
-
-      const result = await service.query<TestRow>('SELECT * FROM test');
-
-      expect(result.rows[0].id).toBe(1);
-      expect(result.rows[0].name).toBe('test');
+      expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('Failed to initialize Database manager'), 'DatabaseService');
     });
   });
 
-  describe('ensureTable', () => {
-    it('should create table if not exists', async () => {
-      mockQuery.mockResolvedValue({} as QueryResult);
+  describe('getPushJobByPath', () => {
+    it('should successfully get push job by path', async () => {
+      const mockJob = { id: 'job-123', path: '/test/path' };
+      mockDbManager.getPathPushJob.mockResolvedValueOnce(mockJob);
 
-      await service.ensureTable('test_table');
+      const result = await service.getPushJobByPath('/test/path', 'tenant-123');
 
-      expect(mockQuery.mock.calls[0][0]).toEqual(expect.stringMatching(/CREATE TABLE IF NOT EXISTS\s+"?test_table"?/i));
-
-      const createQuery = mockQuery.mock.calls[0][0] as string;
-      expect(createQuery).toMatch(/job_id TEXT NOT NULL/i);
-      expect(createQuery).toMatch(/checksum TEXT NOT NULL/i);
-
-      expect(mockLoggerService.log).toHaveBeenCalledWith('Table "test_table" created or already exists.');
+      expect(result).toEqual(mockJob);
+      expect(mockDbManager.getPathPushJob).toHaveBeenCalledWith('/test/path', 'tenant-123');
+      expect(mockLoggerService.log).toHaveBeenCalled();
     });
 
-    it('should handle Error instances', async () => {
-      const error = new Error('Table creation failed');
-      mockQuery.mockRejectedValue(error);
+    it('should throw InternalServerErrorException when database manager is not initialized', async () => {
+      CreateDatabaseManager.mockRejectedValueOnce(new Error('Init failed'));
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          DatabaseService,
+          { provide: LoggerService, useValue: mockLoggerService },
+          { provide: ConfigService, useValue: mockConfigService },
+        ],
+      }).compile();
 
-      await expect(service.ensureTable('test_table')).rejects.toThrow('Table creation failed');
+      const uninitializedService = module.get<DatabaseService>(DatabaseService);
 
-      expect(mockLoggerService.error).toHaveBeenCalledWith('Error while ensuring table "test_table": Table creation failed');
+      await expect(uninitializedService.getPushJobByPath('/test/path', 'tenant-123')).rejects.toThrow(InternalServerErrorException);
     });
 
-    it('should include all required columns', async () => {
-      mockQuery.mockResolvedValue({} as QueryResult);
+    it('should handle connection error', async () => {
+      mockDbManager.getPathPushJob.mockRejectedValue(new Error('connection refused'));
 
-      await service.ensureTable('test_table');
+      await expect(service.getPushJobByPath('/test/path', 'tenant-123')).rejects.toThrow(InternalServerErrorException);
+      expect(mockLoggerService.error).toHaveBeenCalled();
+    });
 
-      const createQuery = mockQuery.mock.calls[0][0] as string;
-      expect(createQuery).toMatch(/id UUID PRIMARY KEY/i);
-      expect(createQuery).toMatch(/data JSONB NOT NULL/i);
-      expect(createQuery).toMatch(/job_id TEXT NOT NULL/i);
-      expect(createQuery).toMatch(/checksum TEXT NOT NULL/i);
-      expect(createQuery).toMatch(/created_at TIMESTAMP NOT NULL DEFAULT NOW\(\)/i);
+    it('should handle disk full error', async () => {
+      mockDbManager.getPathPushJob.mockRejectedValue(new Error('disk full'));
+
+      await expect(service.getPushJobByPath('/test/path', 'tenant-123')).rejects.toThrow(InternalServerErrorException);
+      expect(mockLoggerService.error).toHaveBeenCalled();
+    });
+
+    it('should handle relation does not exist error', async () => {
+      mockDbManager.getPathPushJob.mockRejectedValue(new Error('relation "test_table" does not exist'));
+
+      await expect(service.getPushJobByPath('/test/path', 'tenant-123')).rejects.toThrow(BadRequestException);
+      expect(mockLoggerService.error).toHaveBeenCalled();
+    });
+
+    it('should handle duplicate key error', async () => {
+      mockDbManager.getPathPushJob.mockRejectedValue(new Error('duplicate key value violates constraint'));
+
+      await expect(service.getPushJobByPath('/test/path', 'tenant-123')).rejects.toThrow(ConflictException);
+      expect(mockLoggerService.warn).toHaveBeenCalled();
+    });
+
+    it('should handle unexpected error', async () => {
+      mockDbManager.getPathPushJob.mockRejectedValue(new Error('Some unexpected error'));
+
+      await expect(service.getPushJobByPath('/test/path', 'tenant-123')).rejects.toThrow(InternalServerErrorException);
+      expect(mockLoggerService.error).toHaveBeenCalled();
+    });
+  });
+
+  describe('getDefaultPushJob', () => {
+    it('should successfully get default push job', async () => {
+      const mockJobs = [{ id: 'job-1' }, { id: 'job-2' }];
+      mockDbManager.getDefaultPushJob.mockResolvedValue(mockJobs);
+
+      const result = await service.getDefaultPushJob();
+
+      expect(result).toEqual(mockJobs);
+      expect(mockDbManager.getDefaultPushJob).toHaveBeenCalled();
+      expect(mockLoggerService.log).toHaveBeenCalled();
+    });
+
+    it('should throw InternalServerErrorException when database manager is not initialized', async () => {
+      CreateDatabaseManager.mockRejectedValueOnce(new Error('Init failed'));
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          DatabaseService,
+          { provide: LoggerService, useValue: mockLoggerService },
+          { provide: ConfigService, useValue: mockConfigService },
+        ],
+      }).compile();
+
+      const uninitializedService = module.get<DatabaseService>(DatabaseService);
+
+      await expect(uninitializedService.getDefaultPushJob()).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('should handle database errors', async () => {
+      mockDbManager.getDefaultPushJob.mockRejectedValue(new Error('Database error'));
+
+      await expect(service.getDefaultPushJob()).rejects.toThrow(InternalServerErrorException);
+    });
+  });
+
+  describe('getPushJobById', () => {
+    it('should successfully get push job by id', async () => {
+      const mockJob = { id: 'job-123' };
+      mockDbManager.getIdPushJob.mockResolvedValue(mockJob);
+
+      const result = await service.getPushJobById(ConfigType.PULL, 'job-123');
+
+      expect(result).toEqual(mockJob);
+      expect(mockDbManager.getIdPushJob).toHaveBeenCalledWith(ConfigType.PULL, 'job-123');
+      expect(mockLoggerService.log).toHaveBeenCalled();
+    });
+
+    it('should throw InternalServerErrorException when database manager is not initialized', async () => {
+      CreateDatabaseManager.mockRejectedValueOnce(new Error('Init failed'));
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          DatabaseService,
+          { provide: LoggerService, useValue: mockLoggerService },
+          { provide: ConfigService, useValue: mockConfigService },
+        ],
+      }).compile();
+
+      const uninitializedService = module.get<DatabaseService>(DatabaseService);
+
+      await expect(uninitializedService.getPushJobById(ConfigType.PULL, 'job-123')).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('should handle database errors', async () => {
+      mockDbManager.getIdPushJob.mockRejectedValue(new Error('Database error'));
+
+      await expect(service.getPushJobById(ConfigType.PULL, 'job-123')).rejects.toThrow(InternalServerErrorException);
+    });
+  });
+
+  describe('getPushJob', () => {
+    it('should successfully get push job', async () => {
+      const mockJob = { id: 'job-123', path: '/test/path' };
+      mockDbManager.getPathPushJob.mockResolvedValue(mockJob);
+
+      const result = await service.getPushJob('/test/path', 'tenant-123');
+
+      expect(result).toEqual(mockJob);
+      expect(mockDbManager.getPathPushJob).toHaveBeenCalledWith('/test/path', 'tenant-123');
+    });
+
+    it('should handle database errors with details', async () => {
+      mockDbManager.getPathPushJob.mockRejectedValue(new Error('Database connection error'));
+
+      await expect(service.getPushJob('/test/path', 'tenant-123')).rejects.toThrow(InternalServerErrorException);
+      expect(mockLoggerService.error).toHaveBeenCalled();
     });
   });
 
   describe('insertRows', () => {
-    it('should insert rows using stored procedure', async () => {
-      mockQuery.mockResolvedValue({} as QueryResult);
-      const rows = [{ id: '1', name: 'test', value: 100 }];
+    const mockRows = [
+      { id: '1', data: 'test1', checksum: 'abc', job_id: 'job-1' },
+      { id: '2', data: 'test2', checksum: 'def', job_id: 'job-1' },
+    ];
 
-      await service.insertRows('test_table', rows, 'job-123', 'tenant-123', ConfigType.PUSH);
-
-      expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/CALL rotate_table_with_data/i), ['test_table', JSON.stringify(rows)]);
-      expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO job_history/i), [
-        'tenant-123',
-        'job-123',
-        1,
-        1,
-        null,
-        ConfigType.PUSH,
-      ]);
-      expect(mockLoggerService.log).toHaveBeenCalledWith('Inserting rows with length 1');
-      expect(mockLoggerService.log).toHaveBeenCalledWith('Successfully inserted 1 row(s) into "test_table".');
-      expect(mockLoggerService.log).toHaveBeenCalledWith(`Inserted job history for jobId: job-123`);
+    beforeEach(() => {
+      mockDbManager.ingestData.mockResolvedValue(undefined);
+      mockDbManager.insertJobHistory.mockResolvedValue(undefined);
     });
 
-    it('should insert multiple rows', async () => {
-      mockQuery.mockResolvedValue({} as QueryResult);
-      const rows = [
-        { id: '1', name: 'test1' },
-        { id: '2', name: 'test2' },
-        { id: '3', name: 'test3' },
-      ];
+    it('should successfully insert rows', async () => {
+      await service.insertRows('test_table', mockRows, 'job-123', 'tenant-123', ConfigType.PULL);
 
-      await service.insertRows('test_table', rows, 'job-123', 'tenant-123', ConfigType.PULL);
-
-      expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/CALL rotate_table_with_data/i), ['test_table', JSON.stringify(rows)]);
-      expect(mockLoggerService.log).toHaveBeenCalledWith('Successfully inserted 3 row(s) into "test_table".');
+      expect(mockDbManager.ingestData).toHaveBeenCalled();
+      expect(mockDbManager.insertJobHistory).toHaveBeenCalledWith('tenant-123', 'job-123', 2, 2, null, ConfigType.PULL);
+      expect(mockLoggerService.log).toHaveBeenCalledWith('Successfully inserted 2 row(s) into "test_table".');
     });
 
-    it('should handle empty rows array', async () => {
-      mockQuery.mockResolvedValue({} as QueryResult);
+    it('should insert rows in batches when exceeding batch size', async () => {
+      const largeRows = Array.from({ length: 2500 }, (_, i) => ({
+        id: `${i}`,
+        data: `test${i}`,
+        checksum: `hash${i}`,
+        job_id: 'job-1',
+      }));
 
-      await expect(service.insertRows('test_table', [], 'job-123', 'tenant-123', ConfigType.PUSH)).rejects.toThrow(
-        'No data provided for insertion',
+      await service.insertRows('test_table', largeRows, 'job-123', 'tenant-123', ConfigType.PULL);
+
+      expect(mockDbManager.ingestData).toHaveBeenCalledTimes(3);
+      expect(mockDbManager.insertJobHistory).toHaveBeenCalledWith('tenant-123', 'job-123', 2500, 2500, null, ConfigType.PULL);
+    });
+
+    it('should throw error when no data provided', async () => {
+      await expect(service.insertRows('test_table', [], 'job-123', 'tenant-123', ConfigType.PULL)).rejects.toThrow(
+        'No data provided for insertion.',
       );
-
-      expect(mockLoggerService.error).toHaveBeenCalledWith(expect.stringContaining('No data provided for insertion'));
-
-      expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO job_history/i), [
-        'tenant-123',
-        'job-123',
-        0,
-        0,
-        expect.stringContaining('No data provided for insertion'),
-        ConfigType.PUSH,
-      ]);
     });
 
-    it('should handle empty columns in first row', async () => {
-      const rows = [{}];
+    it('should throw error when no columns found', async () => {
+      const emptyRows = [{}];
 
-      await expect(service.insertRows('test_table', rows, 'job-123', 'tenant-123', ConfigType.PUSH)).rejects.toThrow(
+      await expect(service.insertRows('test_table', emptyRows, 'job-123', 'tenant-123', ConfigType.PULL)).rejects.toThrow(
         'No columns found in the data for insertion.',
       );
 
-      expect(mockLoggerService.error).toHaveBeenCalledWith(expect.stringContaining('No columns found in the data for insertion.'));
-
-      expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO job_history/i), [
+      expect(mockDbManager.insertJobHistory).toHaveBeenCalledWith(
         'tenant-123',
         'job-123',
         1,
         0,
         'No columns found in the data for insertion.',
-        ConfigType.PUSH,
-      ]);
-    });
-
-    it('should handle Error instances during insertion', async () => {
-      mockQuery.mockRejectedValueOnce(new Error('Insertion failed')).mockResolvedValue({} as QueryResult);
-
-      const rows = [{ id: '1', name: 'test' }];
-
-      await expect(service.insertRows('test_table', rows, 'job-123', 'tenant-123', ConfigType.PUSH)).rejects.toThrow('Insertion failed');
-
-      expect(mockLoggerService.error).toHaveBeenCalledWith('Error inserting rows into table "test_table": Insertion failed');
-
-      expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO job_history/i), [
-        'tenant-123',
-        'job-123',
-        1,
-        0,
-        'Insertion failed',
-        ConfigType.PUSH,
-      ]);
-    });
-
-    it('should handle non-Error exceptions during insertion', async () => {
-      const errorObj = { code: '23505', detail: 'Duplicate key' };
-      mockQuery.mockRejectedValueOnce(errorObj).mockResolvedValue({} as QueryResult);
-
-      const rows = [{ id: '1', name: 'test' }];
-
-      await expect(service.insertRows('test_table', rows, 'job-123', 'tenant-123', ConfigType.PULL)).rejects.toThrow(
-        JSON.stringify(errorObj),
+        ConfigType.PULL,
       );
+    });
 
+    it('should handle insertion error and record in job history', async () => {
+      mockDbManager.ingestData.mockRejectedValue(new Error('Insert failed'));
+
+      await expect(service.insertRows('test_table', mockRows, 'job-123', 'tenant-123', ConfigType.PULL)).rejects.toThrow('Insert failed');
+
+      expect(mockDbManager.insertJobHistory).toHaveBeenCalledWith('tenant-123', 'job-123', 2, 0, 'Insert failed', ConfigType.PULL);
       expect(mockLoggerService.error).toHaveBeenCalledWith(expect.stringContaining('Error inserting rows into table "test_table"'));
+    });
 
-      expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringMatching(/INSERT INTO job_history/i),
-        expect.arrayContaining(['tenant-123', 'job-123', 1, 0, expect.any(String), ConfigType.PULL]),
+    it('should throw InternalServerErrorException when database manager is not initialized', async () => {
+      CreateDatabaseManager.mockRejectedValueOnce(new Error('Init failed'));
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          DatabaseService,
+          { provide: LoggerService, useValue: mockLoggerService },
+          { provide: ConfigService, useValue: mockConfigService },
+        ],
+      }).compile();
+
+      const uninitializedService = module.get<DatabaseService>(DatabaseService);
+
+      await expect(uninitializedService.insertRows('test_table', mockRows, 'job-123', 'tenant-123', ConfigType.PULL)).rejects.toThrow();
+    });
+  });
+
+  describe('insertPullJobHistory', () => {
+    it('should throw InternalServerErrorException when database manager is not initialized', async () => {
+      CreateDatabaseManager.mockRejectedValueOnce(new Error('Init failed'));
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          DatabaseService,
+          { provide: LoggerService, useValue: mockLoggerService },
+          { provide: ConfigService, useValue: mockConfigService },
+        ],
+      }).compile();
+
+      const uninitializedService = module.get<DatabaseService>(DatabaseService);
+
+      await expect(uninitializedService.insertPullJobHistory('job-123', 100, 95, null, 'tenant-123', ConfigType.PULL)).rejects.toThrow(
+        InternalServerErrorException,
       );
     });
 
-    it('should use ConfigType.PUSH for push jobs', async () => {
-      mockQuery.mockResolvedValue({} as QueryResult);
-      const rows = [{ id: '1', name: 'test' }];
+    it('should handle database errors', async () => {
+      mockDbManager.insertJobHistory.mockRejectedValue(new Error('Database error'));
 
-      await service.insertRows('test_table', rows, 'job-123', 'tenant-123', ConfigType.PUSH);
+      await expect(service.insertPullJobHistory('job-123', 100, 95, null, 'tenant-123', ConfigType.PULL)).rejects.toThrow(
+        InternalServerErrorException,
+      );
+    });
+  });
 
-      expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO job_history/i), expect.arrayContaining([ConfigType.PUSH]));
+  describe('ensureTable', () => {
+    it('should create table successfully', async () => {
+      await service.ensureTable('test_table');
+
+      expect(mockDbManager.createTable).toHaveBeenCalledWith('"test_table"');
+      expect(mockLoggerService.log).toHaveBeenCalled();
     });
 
-    it('should use ConfigType.PULL for pull jobs', async () => {
-      mockQuery.mockResolvedValue({} as QueryResult);
-      const rows = [{ id: '1', name: 'test' }];
+    it('should handle table names with special characters', async () => {
+      await service.ensureTable('test_table_123');
 
-      await service.insertRows('test_table', rows, 'job-123', 'tenant-123', ConfigType.PULL);
+      expect(mockDbManager.createTable).toHaveBeenCalledWith('"test_table_123"');
+    });
 
-      expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO job_history/i), expect.arrayContaining([ConfigType.PULL]));
+    it('should throw error for invalid table name', async () => {
+      await expect(service.ensureTable('123invalid')).rejects.toThrow('Invalid table name: 123invalid');
+    });
+
+    it('should throw error for table name with invalid characters', async () => {
+      await expect(service.ensureTable('test-table')).rejects.toThrow('Invalid table name: test-table');
+    });
+
+    it('should throw error for table name with spaces', async () => {
+      await expect(service.ensureTable('test table')).rejects.toThrow('Invalid table name: test table');
+    });
+
+    it('should handle database error during table creation', async () => {
+      mockDbManager.createTable.mockRejectedValue(new Error('Table creation failed'));
+
+      await expect(service.ensureTable('test_table')).rejects.toThrow('Table creation failed');
+      expect(mockLoggerService.error).toHaveBeenCalledWith('Error while ensuring table "test_table": Table creation failed');
+    });
+
+    it('should throw InternalServerErrorException when database manager is not initialized', async () => {
+      CreateDatabaseManager.mockRejectedValueOnce(new Error('Init failed'));
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          DatabaseService,
+          { provide: LoggerService, useValue: mockLoggerService },
+          { provide: ConfigService, useValue: mockConfigService },
+        ],
+      }).compile();
+
+      const uninitializedService = module.get<DatabaseService>(DatabaseService);
+
+      await expect(uninitializedService.ensureTable('test_table')).rejects.toThrow(InternalServerErrorException);
     });
   });
 
   describe('updateTable', () => {
-    it('should update table with array data', async () => {
-      mockQuery.mockResolvedValue({} as QueryResult);
-      const data = [{ key: 'value1' }, { key: 'value2' }];
+    const mockData = [
+      { key: 'value1', name: 'test1' },
+      { key: 'value2', name: 'test2' },
+    ];
 
-      await service.updateTable('test_table', 'job-123', data, 'tenant-123', ConfigType.PUSH);
+    it('should update table in REPLACE mode', async () => {
+      const testMockDbManager = {
+        getPathPushJob: jest.fn().mockResolvedValue(undefined),
+        getDefaultPushJob: jest.fn().mockResolvedValue([]),
+        getIdPushJob: jest.fn().mockResolvedValue(undefined),
+        ingestData: jest.fn().mockResolvedValue(undefined),
+        insertJobHistory: jest.fn().mockResolvedValue(undefined),
+        createTable: jest.fn().mockResolvedValue(undefined),
+        deleteRows: jest.fn().mockResolvedValue(undefined),
+      } as unknown as jest.Mocked<DatabaseManagerInstance<ManagerConfig> & ConfigurationDB & EnrichmentDB>;
 
-      expect(mockQuery).toHaveBeenNthCalledWith(1, expect.stringMatching(/CREATE TABLE IF NOT EXISTS/i), undefined);
+      CreateDatabaseManager.mockResolvedValueOnce(testMockDbManager);
 
-      expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringMatching(/CALL rotate_table_with_data/i),
-        expect.arrayContaining(['test_table', expect.any(String)]),
-      );
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          DatabaseService,
+          { provide: LoggerService, useValue: mockLoggerService },
+          { provide: ConfigService, useValue: mockConfigService },
+        ],
+      }).compile();
+
+      const testService = module.get<DatabaseService>(DatabaseService);
+      await testService.onModuleInit();
+
+      await testService.updateTable('test_table', 'job-123', IngestMode.REPLACE, mockData, 'tenant-123', ConfigType.PULL);
+
+      expect(testMockDbManager.createTable).toHaveBeenCalledWith('"test_table"');
+      expect(testMockDbManager.deleteRows).toHaveBeenCalledWith('test_table');
+      expect(testMockDbManager.ingestData).toHaveBeenCalled();
+      expect(testMockDbManager.insertJobHistory).toHaveBeenCalled();
     });
 
-    it('should handle object data by converting to array', async () => {
-      mockQuery.mockResolvedValue({} as QueryResult);
-      const data = { item1: { key: 'value1' }, item2: { key: 'value2' } };
+    it('should throw InternalServerErrorException when database manager is not initialized', async () => {
+      CreateDatabaseManager.mockRejectedValueOnce(new Error('Init failed'));
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          DatabaseService,
+          { provide: LoggerService, useValue: mockLoggerService },
+          { provide: ConfigService, useValue: mockConfigService },
+        ],
+      }).compile();
 
-      await service.updateTable('test_table', 'job-123', data, 'tenant-123', ConfigType.PUSH);
+      const uninitializedService = module.get<DatabaseService>(DatabaseService);
 
-      expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/CALL rotate_table_with_data/i), expect.any(Array));
-    });
-
-    it('should handle single object data', async () => {
-      mockQuery.mockResolvedValue({} as QueryResult);
-      const data = { key: 'value' };
-
-      await service.updateTable('test_table', 'job-123', data, 'tenant-123', ConfigType.PULL);
-
-      expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/CALL rotate_table_with_data/i), expect.any(Array));
-    });
-
-    it('should stringify data as JSON and include job_id and checksum', async () => {
-      mockQuery.mockResolvedValue({} as QueryResult);
-      const data = [{ nested: { key: 'value' } }];
-
-      await service.updateTable('test_table', 'job-123', data, 'tenant-123', ConfigType.PUSH);
-
-      const storedProcCall = mockQuery.mock.calls.find((call) => (call[0] as string).includes('rotate_table_with_data'));
-
-      expect(storedProcCall).toBeDefined();
-      const jsonData = JSON.parse(storedProcCall[1][1]);
-      expect(jsonData[0]).toHaveProperty('id', 'test-uuid-123');
-      expect(jsonData[0]).toHaveProperty('data');
-      expect(jsonData[0]).toHaveProperty('job_id', 'job-123');
-      expect(jsonData[0]).toHaveProperty('checksum');
-      expect(jsonData[0].checksum).toMatch(/^[a-f0-9]{64}$/);
-    });
-
-    it('should call ensureTable before inserting', async () => {
-      mockQuery.mockResolvedValue({} as QueryResult);
-      const data = [{ key: 'value' }];
-
-      await service.updateTable('test_table', 'job-123', data, 'tenant-123', ConfigType.PUSH);
-
-      const createTableCall = mockQuery.mock.calls.find((call) => (call[0] as string).includes('CREATE TABLE IF NOT EXISTS'));
-      expect(createTableCall).toBeDefined();
-    });
-
-    it('should generate consistent checksum for same data', async () => {
-      mockQuery.mockResolvedValue({} as QueryResult);
-      const data = [{ a: 1 }, { a: 1 }];
-
-      await service.updateTable('test_table', 'job-123', data, 'tenant-123', ConfigType.PUSH);
-
-      const storedProcCall = mockQuery.mock.calls.find((call) => (call[0] as string).includes('rotate_table_with_data'));
-
-      const jsonData = JSON.parse(storedProcCall[1][1]);
-      expect(jsonData[0].checksum).toBe(jsonData[1].checksum);
-    });
-
-    it('should generate different checksums for different data', async () => {
-      mockQuery.mockResolvedValue({} as QueryResult);
-      const data = [{ a: 1 }, { a: 2 }];
-
-      await service.updateTable('test_table', 'job-123', data, 'tenant-123', ConfigType.PUSH);
-
-      const storedProcCall = mockQuery.mock.calls.find((call) => (call[0] as string).includes('rotate_table_with_data'));
-
-      const jsonData = JSON.parse(storedProcCall[1][1]);
-      expect(jsonData[0].checksum).not.toBe(jsonData[1].checksum);
-    });
-
-    it('should pass ConfigType to insertRows', async () => {
-      mockQuery.mockResolvedValue({} as QueryResult);
-      const data = [{ key: 'value' }];
-
-      await service.updateTable('test_table', 'job-123', data, 'tenant-123', ConfigType.PULL);
-
-      expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/INSERT INTO job_history/i), expect.arrayContaining([ConfigType.PULL]));
+      await expect(
+        uninitializedService.updateTable('test_table', 'job-123', IngestMode.APPEND, mockData, 'tenant-123', ConfigType.PULL),
+      ).rejects.toThrow(InternalServerErrorException);
     });
   });
 });

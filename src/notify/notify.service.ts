@@ -47,16 +47,7 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
       this.isInitialized = true;
       this.logger.log('NATS consumer initialized for config.notification');
 
-      const query = `
-  SELECT *
-  FROM push_jobs
-  WHERE 
-     status IN ('STATUS_08_DEPLOYED', 'STATUS_06_EXPORTED')
-    AND publishing_status = 'active';
-`;
-
-      const result = await this.db.query(query);
-      const configs = result.rows as PushJob[];
+      const configs = (await this.db.getDefaultPushJob()) as unknown as PushJob[];
 
       for (const config of configs) {
         await this.redis.setJson(config.path, JSON.stringify(config), this.cacheTtl);
@@ -94,26 +85,7 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
     }
     const { endpointId, configType } = payload;
     try {
-      const query =
-        configType === ConfigType.PUSH
-          ? `
-          SELECT *
-          FROM push_jobs
-          WHERE id = $1
-          LIMIT 1;
-        `
-          : `
-        SELECT 
-          j.*, 
-           s.cron
-            FROM pull_jobs j
-             LEFT JOIN cron_jobs s ON j.schedule_id = s.id
-              WHERE j.id = $1
-               LIMIT 1;
-        `;
-
-      const result = await this.db.query(query, [endpointId]);
-      const record = result.rows[0] as PushJob | Job | undefined;
+      const record = (await this.db.getPushJobById(configType, endpointId)) as PushJob | Job | undefined;
 
       if (!record) {
         this.logger.warn(`No record found for endpointId: ${endpointId}`);
@@ -127,7 +99,7 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
       }
 
       if (configType === ConfigType.PUSH) {
-        await this.redis.setJson(record.path!, JSON.stringify(record), this.cacheTtl);
+        await this.redis.setJson(record.path, JSON.stringify(record), this.cacheTtl);
         this.logger.log(`Updated cache for key: ${record.path}`);
       } else {
         const data = record as Job;
