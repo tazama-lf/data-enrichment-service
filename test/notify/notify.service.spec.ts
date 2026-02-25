@@ -34,7 +34,7 @@ describe('NotifyService', () => {
     updated_at: new Date(),
   };
 
-  const mockPullJob: Job = {
+  const mockPullJob = {
     id: 'pull-123',
     tenant_id: 'tenant-456',
     path: null,
@@ -55,7 +55,7 @@ describe('NotifyService', () => {
     publishing_status: ScheduleStatus.ACTIVE,
     created_at: new Date(),
     type: 'pull',
-  };
+  } as unknown as Job;
 
   beforeEach(async () => {
     mockLoggerService = {
@@ -243,7 +243,13 @@ describe('NotifyService', () => {
 
       await service.handleNatsMessage(reqObj, handleResponse);
 
-      expect(mockRedisService.setJson).toHaveBeenCalledWith(null, JSON.stringify(pushJobWithNullPath), 86400);
+      expect(mockRedisService.setJson).not.toHaveBeenCalled();
+      expect(mockLoggerService.warn).toHaveBeenCalledWith(expect.stringContaining('Cannot cache PUSH config: path is null'));
+      expect(handleResponse).toHaveBeenCalledWith({
+        endpointId: 'push-123',
+        status: 'ACK',
+        timestamp: expect.any(String),
+      });
     });
   });
 
@@ -264,6 +270,34 @@ describe('NotifyService', () => {
       expect(mockDatabaseService.getPushJobById).toHaveBeenCalledWith(ConfigType.PULL, 'pull-123');
       expect(mockExecutorService.addCronJob).toHaveBeenCalledWith(mockPullJob);
       expect(mockExecutorService.deleteCronJob).not.toHaveBeenCalled();
+      expect(handleResponse).toHaveBeenCalledWith({
+        endpointId: 'pull-123',
+        status: 'ACK',
+        timestamp: expect.any(String),
+      });
+    });
+
+    it('should handle inactive pull config by deleting cron job', async () => {
+      const handleResponse = jest.fn().mockResolvedValue(undefined);
+      const reqObj = {
+        dataPayload: JSON.stringify({
+          endpointId: 'pull-123',
+          configType: ConfigType.PULL,
+        }),
+      };
+
+      const inactivePullJob = {
+        ...mockPullJob,
+        publishing_status: ScheduleStatus.INACTIVE,
+      };
+
+      mockDatabaseService.getPushJobById.mockResolvedValue(inactivePullJob as unknown as Record<string, unknown>);
+
+      await service.handleNatsMessage(reqObj, handleResponse);
+
+      expect(mockDatabaseService.getPushJobById).toHaveBeenCalledWith(ConfigType.PULL, 'pull-123');
+      expect(mockExecutorService.deleteCronJob).toHaveBeenCalledWith('pull-123', 'schedule-789');
+      expect(mockExecutorService.addCronJob).not.toHaveBeenCalled();
       expect(handleResponse).toHaveBeenCalledWith({
         endpointId: 'pull-123',
         status: 'ACK',
@@ -293,32 +327,31 @@ describe('NotifyService', () => {
       expect(mockExecutorService.deleteCronJob).not.toHaveBeenCalled();
       expect(mockLoggerService.warn).toHaveBeenCalledWith('Cannot delete cron job: schedule_id missing for job pull-123');
     });
-
-    it('should warn and not delete cron job when schedule_id is null', async () => {
-      const handleResponse = jest.fn().mockResolvedValue(undefined);
-      const reqObj = {
-        dataPayload: JSON.stringify({
-          endpointId: 'pull-123',
-          configType: ConfigType.PULL,
-        }),
-      };
-
-      const pullJobNoSchedule = {
-        ...mockPullJob,
-        schedule_id: null,
-        publishing_status: ScheduleStatus.INACTIVE,
-      };
-
-      mockDatabaseService.getPushJobById.mockResolvedValue(pullJobNoSchedule as unknown as Record<string, unknown>);
-
-      await service.handleNatsMessage(reqObj, handleResponse);
-
-      expect(mockExecutorService.deleteCronJob).not.toHaveBeenCalled();
-      expect(mockLoggerService.warn).toHaveBeenCalledWith('Cannot delete cron job: schedule_id missing for job pull-123');
-    });
   });
 
   describe('handleNatsMessage - Error handling', () => {
+    it('should handle record not found', async () => {
+      const handleResponse = jest.fn().mockResolvedValue(undefined);
+      const reqObj = {
+        dataPayload: JSON.stringify({
+          endpointId: 'push-999',
+          configType: ConfigType.PUSH,
+        }),
+      };
+
+      mockDatabaseService.getPushJobById.mockResolvedValue(undefined);
+
+      await service.handleNatsMessage(reqObj, handleResponse);
+
+      expect(mockLoggerService.warn).toHaveBeenCalledWith('No record found for endpointId: push-999');
+      expect(handleResponse).toHaveBeenCalledWith({
+        endpointId: 'push-999',
+        status: 'NACK',
+        error: 'Record not found for endpointId: push-999',
+        timestamp: expect.any(String),
+      });
+    });
+
     it('should handle database query error', async () => {
       const handleResponse = jest.fn().mockResolvedValue(undefined);
       const reqObj = {
@@ -439,15 +472,13 @@ describe('NotifyService', () => {
         }),
       };
 
-      mockDatabaseService.getPushJobById.mockResolvedValue(undefined);
-
       await service.handleNatsMessage(reqObj, handleResponse);
 
-      expect(mockLoggerService.warn).toHaveBeenCalledWith('No record found for endpointId: undefined');
+      expect(mockDatabaseService.getPushJobById).not.toHaveBeenCalled();
       expect(handleResponse).toHaveBeenCalledWith(
         expect.objectContaining({
           status: 'NACK',
-          error: 'Record not found for endpointId: undefined',
+          error: 'Invalid payload: endpointId and configType are required',
         }),
       );
     });
@@ -460,15 +491,13 @@ describe('NotifyService', () => {
         }),
       };
 
-      mockDatabaseService.getPushJobById.mockResolvedValue(undefined);
-
       await service.handleNatsMessage(reqObj, handleResponse);
 
-      expect(mockLoggerService.warn).toHaveBeenCalledWith('No record found for endpointId: push-123');
+      expect(mockDatabaseService.getPushJobById).not.toHaveBeenCalled();
       expect(handleResponse).toHaveBeenCalledWith(
         expect.objectContaining({
           status: 'NACK',
-          error: 'Record not found for endpointId: push-123',
+          error: 'Invalid payload: endpointId and configType are required',
         }),
       );
     });

@@ -66,11 +66,11 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
   }
 
   async handleNatsMessage(reqObj: unknown, handleResponse: (response: object) => Promise<void>): Promise<void> {
-    let payload: { endpointId: string; configType: ConfigType } | null = null;
+    let payload: { endpointId?: string; configType?: ConfigType } = {};
 
     try {
       const { dataPayload } = reqObj as { dataPayload: string };
-      payload = JSON.parse(dataPayload) as { endpointId: string; configType: ConfigType };
+      payload = JSON.parse(dataPayload) as { endpointId?: string; configType?: ConfigType };
       this.logger.log(`RECEIVING MESSAGE ${JSON.stringify(payload)}`);
     } catch (jsonError: unknown) {
       const message = jsonError instanceof Error ? jsonError.message : String(jsonError);
@@ -83,6 +83,16 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
       });
       return;
     }
+
+    if (!payload.endpointId || !payload.configType) {
+      await handleResponse({
+        status: Status.NACK,
+        error: 'Invalid payload: endpointId and configType are required',
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
     const { endpointId, configType } = payload;
     try {
       const record = (await this.db.getPushJobById(configType, endpointId)) as PushJob | Job | undefined;
@@ -99,8 +109,13 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
       }
 
       if (configType === ConfigType.PUSH) {
-        await this.redis.setJson(record.path, JSON.stringify(record), this.cacheTtl);
-        this.logger.log(`Updated cache for key: ${record.path}`);
+        const pushRecord = record as PushJob;
+        if (!pushRecord.path) {
+          this.logger.warn(`Cannot cache PUSH config: path is null for endpointId ${endpointId}`);
+        } else {
+          await this.redis.setJson(pushRecord.path, JSON.stringify(pushRecord), this.cacheTtl);
+          this.logger.log(`Updated cache for key: ${pushRecord.path}`);
+        }
       } else {
         const data = record as Job;
         const isActive = data.publishing_status === ScheduleStatus.ACTIVE;

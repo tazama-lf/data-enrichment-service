@@ -22,7 +22,7 @@ export class DatabaseService implements OnModuleInit {
     private readonly loggerService: LoggerService,
     private readonly configService: ConfigService,
   ) {
-    this.batchSize = this.configService.get<number>('BATCH_SIZE', 1000);
+    this.batchSize = this.configService.get<number>('BATCH_SIZE') ?? 1000;
   }
 
   async onModuleInit(): Promise<void> {
@@ -31,22 +31,28 @@ export class DatabaseService implements OnModuleInit {
 
   private async initDb(): Promise<void> {
     try {
+      const dbHost = this.configService.get<string>('DB_HOST')!;
+      const dbPort = this.configService.get<number>('DB_PORT')!;
+      const dbUser = this.configService.get<string>('DB_USER')!;
+      const dbPassword = this.configService.get<string>('DB_PASSWORD')!;
+      const dbCertPath = this.configService.get<string>('DB_CERT_PATH') ?? '';
+
       const config: ManagerConfig = {
         configuration: {
-          host: process.env.DB_HOST ?? '10.10.80.37',
-          port: parseInt(process.env.DB_PORT ?? '5432'),
-          databaseName: process.env.DB_NAME ?? 'configuration',
-          user: process.env.DB_USER ?? 'postgres',
-          password: process.env.DB_PASSWORD ?? 'postgres',
-          certPath: process.env.DB_CERT_PATH ?? '',
+          host: dbHost,
+          port: dbPort,
+          databaseName: 'configuration',
+          user: dbUser,
+          password: dbPassword,
+          certPath: dbCertPath,
         },
         enrichment: {
-          host: process.env.DB_HOST ?? '10.10.80.37',
-          port: parseInt(process.env.DB_PORT ?? '5432'),
-          databaseName: process.env.DB_NAME ?? 'enrichment',
-          user: process.env.DB_USER ?? 'postgres',
-          password: process.env.DB_PASSWORD ?? 'postgres',
-          certPath: process.env.DB_CERT_PATH ?? '',
+          host: dbHost,
+          port: dbPort,
+          databaseName: 'enrichment',
+          user: dbUser,
+          password: dbPassword,
+          certPath: dbCertPath,
         },
       };
 
@@ -54,6 +60,7 @@ export class DatabaseService implements OnModuleInit {
       this.loggerService.log('Database manager initialized successfully', this.log_context);
     } catch (error) {
       this.loggerService.error(`Failed to initialize Database manager: ${String(error)}`, this.log_context);
+      throw error;
     }
   }
 
@@ -247,7 +254,7 @@ export class DatabaseService implements OnModuleInit {
       const errorMsg = error instanceof Error ? error.message : JSON.stringify(error);
 
       this.loggerService.error(`Error inserting rows into table "${tableName}": ${errorMsg}`);
-      await this.insertPullJobHistory(jobId, rows.length, 0, errorMsg, tenantId, type);
+      await this.insertPullJobHistory(jobId, rows.length, processedCount, errorMsg, tenantId, type);
       throw new Error(errorMsg);
     }
   }
@@ -305,8 +312,11 @@ export class DatabaseService implements OnModuleInit {
       }
 
       await this.ensureTable(tableName);
-      const arr = Array.isArray(data) ? data : Object.values(data as Record<string, unknown>).flat();
+      const arr = Array.isArray(data) ? data : data && typeof data === 'object' ? [data] : [];
 
+      if (arr.length === 0) {
+        throw new Error('No valid data provided for table update.');
+      }
       const rows = arr.map((item) => ({
         id: v4(),
         data: JSON.stringify(item),

@@ -24,14 +24,16 @@ export class JobService {
   @ApmSpan('data-enrichment-push')
   async createEnrich({ req, body, tenantId }: { req: Request; body: CreateEnrichDataDto; tenantId: string }): Promise<ISuccess> {
     try {
-      const contentType = req.headers['content-type'];
-      if (!contentType?.includes('application/json')) {
+      const contentType = req.headers['content-type'] ?? req.headers['Content-Type'];
+      const contentTypeStr = Array.isArray(contentType) ? contentType[0] : contentType;
+      if (!contentTypeStr?.toLowerCase().includes('application/json')) {
         throw new BadRequestException('Content-Type must be application/json');
       }
 
       const { path } = req;
 
-      const cachedEndpoint = await this.redis.getJson(path);
+      const cacheKey = `${tenantId}:${path}`;
+      const cachedEndpoint = await this.redis.getJson(cacheKey);
       let endpoint: PushJob;
 
       if (cachedEndpoint) {
@@ -40,6 +42,7 @@ export class JobService {
         if (endpoint.tenant_id !== tenantId) {
           throw new NotFoundException(`Endpoint ${path} does not exist with tenant_id ${tenantId}`);
         }
+
         this.loggerService.log(`Using endpoint from cache: ${path}`);
       } else {
         const result = await this.db.getPushJobByPath(path, tenantId);
@@ -50,7 +53,7 @@ export class JobService {
 
         endpoint = result as unknown as PushJob;
 
-        await this.redis.setJson(path, JSON.stringify(endpoint), this.cacheTtl);
+        await this.redis.setJson(cacheKey, JSON.stringify(endpoint), this.cacheTtl);
         this.loggerService.log(`Cached endpoint for path: ${path}`);
       }
 

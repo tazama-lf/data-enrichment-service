@@ -95,6 +95,26 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsString()
   LOGSTASH_LEVEL?: string;
+
+  @IsString()
+  DB_HOST!: string;
+
+  @IsNumber()
+  DB_PORT!: number;
+
+  @IsString()
+  DB_USER!: string;
+
+  @IsString()
+  DB_PASSWORD!: string;
+
+  @IsOptional()
+  @IsString()
+  DB_CERT_PATH?: string;
+
+  @IsOptional()
+  @IsNumber()
+  BATCH_SIZE?: number;
 }
 
 export const validate = (config: Record<string, unknown>): EnvironmentVariables => {

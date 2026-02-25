@@ -80,10 +80,12 @@ export class ExecutorService {
       }),
     );
 
-    const isSuccessfulResponse = status >= 200 && status < 300 && data !== null && typeof data === 'object';
+    const isSuccessfulResponse = status >= 200 && status < 300;
 
     if (isSuccessfulResponse) {
-      await this.db.updateTable(`${job.tenant_id}_${job.table_name}`, job.id, job.mode, data, job.tenant_id, ConfigType.PULL);
+      if (data !== null && data !== undefined && typeof data === 'object') {
+        await this.db.updateTable(`${job.tenant_id}_${job.table_name}`, job.id, job.mode, data, job.tenant_id, ConfigType.PULL);
+      }
       await this.redis.set(jobKey, 0, this.cacheTtl);
     } else {
       await this.handleFailure(job, jobKey);
@@ -140,7 +142,12 @@ export class ExecutorService {
       this.loggerService.error(`SFTP error: ${message}`);
       await this.handleFailure(job, jobKey);
     } finally {
-      await sftp.end();
+      try {
+        await sftp.end();
+      } catch (cleanupErr: unknown) {
+        const cleanupMessage = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr);
+        this.loggerService.warn(`SFTP cleanup error (non-critical): ${cleanupMessage}`);
+      }
     }
   }
 

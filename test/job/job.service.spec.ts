@@ -102,7 +102,7 @@ describe('JobService', () => {
 
         const result = await service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
 
-        expect(mockRedisService.getJson).toHaveBeenCalledWith('/tcs/test-endpoint');
+        expect(mockRedisService.getJson).toHaveBeenCalledWith('tenant_456:/tcs/test-endpoint');
         expect(mockLoggerService.log).toHaveBeenCalledWith('Using endpoint from cache: /tcs/test-endpoint');
         expect(mockDatabaseService.updateTable).toHaveBeenCalledWith(
           'tenant_456_test_table',
@@ -130,9 +130,9 @@ describe('JobService', () => {
 
         const result = await service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
 
-        expect(mockRedisService.getJson).toHaveBeenCalledWith('/tcs/test-endpoint');
+        expect(mockRedisService.getJson).toHaveBeenCalledWith('tenant_456:/tcs/test-endpoint');
         expect(mockDatabaseService.getPushJobByPath).toHaveBeenCalledWith('/tcs/test-endpoint', 'tenant_456');
-        expect(mockRedisService.setJson).toHaveBeenCalledWith('/tcs/test-endpoint', JSON.stringify(mockEndpoint), 86400);
+        expect(mockRedisService.setJson).toHaveBeenCalledWith('tenant_456:/tcs/test-endpoint', JSON.stringify(mockEndpoint), 86400);
         expect(mockLoggerService.log).toHaveBeenCalledWith('Cached endpoint for path: /tcs/test-endpoint');
         expect(result).toEqual({
           message: 'Data Enriched Successfully',
@@ -243,7 +243,7 @@ describe('JobService', () => {
       });
 
       it('should be case-insensitive for Content-Type header', async () => {
-        mockRequest.headers = { 'content-type': 'application/json' };
+        mockRequest.headers = { 'Content-Type': 'Application/JSON' };
         mockRedisService.getJson.mockResolvedValue(JSON.stringify(mockEndpoint));
 
         const result = await service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
@@ -532,7 +532,7 @@ describe('JobService', () => {
 
         await service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
 
-        expect(mockRedisService.setJson).toHaveBeenCalledWith('/tcs/test-endpoint', JSON.stringify(mockEndpoint), 86400);
+        expect(mockRedisService.setJson).toHaveBeenCalledWith('tenant_456:/tcs/test-endpoint', JSON.stringify(mockEndpoint), 86400);
       });
 
       it('should not query database when endpoint is in cache', async () => {
@@ -561,7 +561,7 @@ describe('JobService', () => {
 
         await newService.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
 
-        expect(mockRedisService.setJson).toHaveBeenCalledWith('/tcs/test-endpoint', JSON.stringify(mockEndpoint), 3600);
+        expect(mockRedisService.setJson).toHaveBeenCalledWith('tenant_456:/tcs/test-endpoint', JSON.stringify(mockEndpoint), 3600);
       });
     });
 
@@ -625,7 +625,7 @@ describe('JobService', () => {
           tenantId: 'tenant_456',
         });
 
-        expect(mockRedisService.getJson).toHaveBeenCalledWith('/tcs/another-endpoint');
+        expect(mockRedisService.getJson).toHaveBeenCalledWith('tenant_456:/tcs/another-endpoint');
         expect(result.success).toBe(true);
       });
 
@@ -649,7 +649,7 @@ describe('JobService', () => {
 
         await service.createEnrich({ req: { ...mockRequest, path: customPath } as Request, body: mockBody, tenantId: 'tenant_456' });
 
-        expect(mockRedisService.getJson).toHaveBeenCalledWith(customPath);
+        expect(mockRedisService.getJson).toHaveBeenCalledWith('tenant_456:/tcs/custom-path');
       });
     });
 

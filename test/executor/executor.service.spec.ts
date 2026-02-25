@@ -158,6 +158,22 @@ describe('ExecutorService', () => {
 
       const addCronJobCall = mockSchedulerRegistry.addCronJob.mock.calls[0];
     });
+
+    it('should throw error when schedule_id is missing', async () => {
+      const jobWithoutScheduleId = { ...mockJob, schedule_id: undefined };
+
+      await expect(service.addCronJob(jobWithoutScheduleId)).rejects.toThrow(
+        'Cannot schedule job job-123: missing schedule_id or cron expression',
+      );
+    });
+
+    it('should throw error when cron is missing', async () => {
+      const jobWithoutCron = { ...mockJob, cron: undefined };
+
+      await expect(service.addCronJob(jobWithoutCron)).rejects.toThrow(
+        'Cannot schedule job job-123: missing schedule_id or cron expression',
+      );
+    });
   });
 
   describe('deleteCronJob', () => {
@@ -258,7 +274,7 @@ describe('ExecutorService', () => {
       expect(mockDatabaseService.updateTable).not.toHaveBeenCalled();
     });
 
-    it('should handle failure when data is not an object', async () => {
+    it('should handle success when data is not an object (skips DB update)', async () => {
       const httpJob = { ...mockJob, source_type: SourceType.HTTP };
       mockHttpService.get.mockReturnValue(
         of({
@@ -272,7 +288,7 @@ describe('ExecutorService', () => {
 
       await service.handleHttpJob(httpJob, 'job-key');
 
-      expect(mockRedisService.getJson).toHaveBeenCalledWith('job-key');
+      expect(mockRedisService.set).toHaveBeenCalledWith('job-key', 0, 86400);
       expect(mockDatabaseService.updateTable).not.toHaveBeenCalled();
     });
 
@@ -300,23 +316,21 @@ describe('ExecutorService', () => {
       expect(mockRedisService.set).toHaveBeenCalledWith('job-key', 0, 86400);
     });
 
-    it('should call handleFailure when data is null', async () => {
+    it('should treat null data as success and skip DB update', async () => {
       const httpJob = { ...mockJob, source_type: SourceType.HTTP };
       mockHttpService.get.mockReturnValue(
         of({
           data: null,
-          status: 200,
-          statusText: 'OK',
+          status: 204,
+          statusText: 'No Content',
           headers: {},
           config: {} as never,
         }),
       );
 
-      const handleFailureSpy = jest.spyOn(service, 'handleFailure').mockResolvedValue(undefined);
-
       await service.handleHttpJob(httpJob, 'job-key');
 
-      expect(handleFailureSpy).toHaveBeenCalledWith(httpJob, 'job-key');
+      expect(mockRedisService.set).toHaveBeenCalledWith('job-key', 0, 86400);
       expect(mockDatabaseService.updateTable).not.toHaveBeenCalled();
     });
   });

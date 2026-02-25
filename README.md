@@ -26,6 +26,13 @@ You then need to configure your environment: a [sample](.env.sample) configurati
 cp .env.sample .env
 ```
 
+**Important Security Requirements:**
+1. Update all placeholder values in `.env` (especially database credentials marked with `<change_me>`)
+2. Never commit `.env` files containing real credentials to version control
+3. Ensure `.gitignore` includes `.env` to prevent accidental commits
+4. Use strong passwords for all database and service credentials
+5. For production deployments, use a secrets management service instead of `.env` files
+
 #### Prerequisites
 
 - Node.js 20+
@@ -62,14 +69,27 @@ The service will be available at `http://localhost:3001`
 
 ### Database Variables
 
-| Variable                      | Purpose                          | Example                                                  | Required |
-| ----------------------------- | -------------------------------- | -------------------------------------------------------- | -------- |
-| `CONFIGURATION_DATABASE_URL`  | PostgreSQL connection string     | `postgresql://postgres:password@localhost:5432/database` | Yes      |
-| `POSTGRES_CONTAINER_NAME`     | PostgreSQL Docker container name | `my_postgres`                                            | No       |
-| `POSTGRES_PORT`               | PostgreSQL port                  | `5432`                                                   | No       |
-| `POSTGRES_USER`               | PostgreSQL username              | `postgres`                                               | No       |
-| `POSTGRES_PASSWORD`           | PostgreSQL password              | `postgres`                                               | No       |
-| `POSTGRES_DB`                 | PostgreSQL database name         | `mydb`                                                   | No       |
+| Variable                      | Purpose                                  | Example                                                  | Required |
+| ----------------------------- | ---------------------------------------- | -------------------------------------------------------- | -------- |
+| `CONFIGURATION_DATABASE_URL`  | PostgreSQL connection string             | `postgresql://postgres:password@localhost:5432/database` | Yes      |
+| `DB_HOST`                     | Database server hostname                 | `localhost`, `10.10.80.37`                               | Yes      |
+| `DB_PORT`                     | Database server port                     | `5432`                                                   | Yes      |
+| `DB_USER`                     | Database username                        | `admin`, `postgres`                                      | Yes      |
+| `DB_PASSWORD`                 | Database password                        | `your-secure-password`                                   | Yes      |
+| `DB_CERT_PATH`                | Path to SSL/TLS certificate (optional)   | `/path/to/cert.pem`                                      | No       |
+| `BATCH_SIZE`                  | Batch size for bulk operations           | `1000`, `500`                                            | No       |
+| `POSTGRES_CONTAINER_NAME`     | PostgreSQL Docker container name         | `my_postgres`                                            | No       |
+| `POSTGRES_PORT`               | PostgreSQL port (Docker only)            | `5432`                                                   | No       |
+| `POSTGRES_USER`               | PostgreSQL username (Docker only)        | `postgres`                                               | No       |
+| `POSTGRES_PASSWORD`           | PostgreSQL password (Docker only)        | `postgres`                                               | No       |
+| `POSTGRES_DB`                 | PostgreSQL database name (Docker only)   | `mydb`                                                   | No       |
+
+**Security Notes:**
+- Never commit database credentials to version control
+- Use strong passwords for production environments
+- Consider using secrets management services (AWS Secrets Manager, Azure Key Vault, etc.) in production
+- Enable SSL/TLS connections using `DB_CERT_PATH` for production databases
+- The service validates all required DB variables at startup and will fail if credentials are missing
 
 **Note:** The connection string format is `postgresql://[user[:password]@][host][:port][/database]`
 
@@ -239,6 +259,9 @@ npm run test:watch
 **Issue:** Database connection errors
 - Verify PostgreSQL is running: `docker ps` or check service status
 - Confirm credentials in `.env` match your database
+- Ensure all required DB variables are set: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`
+- The service will fail to start if any required database credentials are missing
+- Check database logs for authentication failures
 
 **Issue:** Redis connection errors
 - Check Redis is running: `docker ps` or service status
