@@ -45,11 +45,15 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
         this.producerStream,
       );
       this.isInitialized = true;
-      this.logger.log('NATS consumer initialized for config.notification');
+      this.logger.log(`NATS consumer initialized for ${this.consumerStream}`);
 
       const configs = (await this.db.getDefaultPushJob()) as unknown as PushJob[];
 
       for (const config of configs) {
+        if (!config.path) {
+          this.logger.warn(`Skipping cache preload for job ${config.id}: path is null`);
+          continue;
+        }
         await this.redis.setJson(config.path, JSON.stringify(config), this.cacheTtl);
       }
       this.logger.log(`Cache preloaded: ${configs.length} configurations`);

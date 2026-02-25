@@ -1,7 +1,7 @@
 import { plainToClass } from 'class-transformer';
 import { IsBoolean, IsEnum, IsNumber, IsNumberString, IsOptional, IsString, validateSync } from 'class-validator';
 
-enum NodeEnv {
+export enum NodeEnv {
   DEVELOPMENT = 'dev',
   PRODUCTION = 'prod',
   TEST = 'test',

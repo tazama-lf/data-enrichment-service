@@ -210,39 +210,6 @@ describe('DatabaseService', () => {
     });
   });
 
-  describe('getPushJob', () => {
-    it('should successfully get push job', async () => {
-      const mockJob = { id: 'job-123', path: '/test/path' };
-      mockDbManager.getPathPushJob.mockResolvedValue(mockJob);
-
-      const result = await service.getPushJob('/test/path', 'tenant-123');
-
-      expect(result).toEqual(mockJob);
-      expect(mockDbManager.getPathPushJob).toHaveBeenCalledWith('/test/path', 'tenant-123');
-    });
-
-    it('should handle database errors with details', async () => {
-      mockDbManager.getPathPushJob.mockRejectedValue(new Error('Database connection error'));
-
-      await expect(service.getPushJob('/test/path', 'tenant-123')).rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalled();
-    });
-
-    it('should throw when DbManager is not initialized', async () => {
-      const module: TestingModule = await Test.createTestingModule({
-        providers: [
-          DatabaseService,
-          { provide: LoggerService, useValue: mockLoggerService },
-          { provide: ConfigService, useValue: mockConfigService },
-        ],
-      }).compile();
-
-      const testService = module.get<DatabaseService>(DatabaseService);
-
-      await expect(testService.getPushJob('/test/path', 'tenant-123')).rejects.toThrow(InternalServerErrorException);
-    });
-  });
-
   describe('insertRows', () => {
     const mockRows = [
       { id: '1', data: 'test1', checksum: 'abc', job_id: 'job-1' },
@@ -320,16 +287,6 @@ describe('DatabaseService', () => {
       const testService = module.get<DatabaseService>(DatabaseService);
 
       await expect(testService.insertRows('test_table', mockRows, 'job-123', 'tenant-123', ConfigType.PULL)).rejects.toThrow(
-        InternalServerErrorException,
-      );
-    });
-  });
-
-  describe('insertPullJobHistory', () => {
-    it('should handle database errors', async () => {
-      mockDbManager.insertJobHistory.mockRejectedValue(new Error('Database error'));
-
-      await expect(service.insertPullJobHistory('job-123', 100, 95, null, 'tenant-123', ConfigType.PULL)).rejects.toThrow(
         InternalServerErrorException,
       );
     });

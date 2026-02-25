@@ -63,8 +63,8 @@ The service will be available at `http://localhost:3001`
 | `MAX_CPU`        | Maximum CPU cores to use               | `1`     | `1`, `2`, `4`            | Yes      |
 | `SIZE`           | Maximum request body size              | `100mb` | `150mb`                  | Yes      |
 | `CORS_ORIGINS`   | Allowed CORS origins (comma-separated) | -       | `localhost,10.10.80.37`  | Yes      |
-| `SALT_ROUNDS`    | Password hashing rounds                | `9`     | `10`, `12`               | Yes      |
-| `ENCRYPTION_KEY` | AES encryption key for sensitive data  | -       | `32-character-hex-key`   | Yes      |
+| `SALT_ROUNDS`    | Password hashing rounds                | `10`     | `10`, `12`               | Yes      |
+| `ENCRYPTION_KEY` | AES-256 encryption key for sensitive data | -    | `32-byte UTF-8 string` | Yes |
 | `HTTP_TIMEOUT` | HTTP Timeout Limit  | -       | `3000`   | No      |
 
 ### Database Variables
@@ -200,6 +200,7 @@ sequenceDiagram
     DEAPI->>DEAPI: 4. Validate data against schema
     alt Validation Failed
         DEAPI-->>Client: 400: Validation errors
+    else Validation Passed
     end
     DEAPI->>DEAPI: 5. Transform & enrich data
     DEAPI->>DB: 6. Store enriched data
@@ -275,4 +276,4 @@ npm run test:watch
 
 - Verify JWT token is valid and not expired
 - Ensure `TAZAMA_AUTH_URL` is reachable and responding
-- Test public key file is readable by the service: `cat public-key.pem`
+- The public key file is readable by the service: `cat public-key.pem`

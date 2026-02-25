@@ -190,21 +190,6 @@ export class DatabaseService implements OnModuleInit {
     }
   }
 
-  async getPushJob(path: string, tenantId: string): Promise<Record<string, unknown> | undefined> {
-    try {
-      if (!this.DbManager) {
-        throw new InternalServerErrorException('Database manager not initialized - database operation cannot proceed');
-      }
-
-      this.loggerService.log(`Getting Push job: ${path} for tenant: ${tenantId}`, this.log_context);
-      return await this.DbManager.getPathPushJob(path, tenantId);
-    } catch (error) {
-      this.handleDatabaseError(error, 'push job', {
-        details: `push job ${path} for tenant ${tenantId}`,
-      });
-    }
-  }
-
   async insertRows(
     tableName: string,
     rows: Array<Record<string, unknown>>,
@@ -238,10 +223,12 @@ export class DatabaseService implements OnModuleInit {
 
         const values = batch.flatMap((row) => keys.map((k) => row[k]));
 
+        const quotedKeys = keys.map((k) => `"${k.replace(/"/g, '""')}"`).join(', ');
+        const quotedTable = `"${tableName.replace(/"/g, '""')}"`;
         const insertQuery = `
-        INSERT INTO ${tableName} (${keys.join(', ')})
-        VALUES ${placeholders};
-      `;
+          INSERT INTO ${quotedTable} (${quotedKeys})
+          VALUES ${placeholders};
+        `;
 
         await this.DbManager.ingestData(insertQuery, values);
         processedCount += batch.length;
