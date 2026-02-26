@@ -212,6 +212,11 @@ export class DatabaseService implements OnModuleInit {
         throw new Error('No columns found in the data for insertion.');
       }
 
+      const invalidKeys = keys.filter((key) => !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key));
+      if (invalidKeys.length > 0) {
+        throw new Error(`Invalid column name(s): ${invalidKeys.join(', ')}`);
+      }
+
       this.loggerService.log(`Inserting ${rows.length} rows with ${keys.length} columns`);
 
       for (let i = 0; i < rows.length; i += this.batchSize) {
@@ -223,10 +228,12 @@ export class DatabaseService implements OnModuleInit {
 
         const values = batch.flatMap((row) => keys.map((k) => row[k]));
 
+        const quotedKeys = keys.map((k) => `"${k.replace(/"/g, '""')}"`).join(', ');
+        const quotedTable = `"${tableName.replace(/"/g, '""')}"`;
         const insertQuery = `
-        INSERT INTO ${tableName} (${keys.join(', ')})
-        VALUES ${placeholders};
-      `;
+          INSERT INTO ${quotedTable} (${quotedKeys})
+          VALUES ${placeholders};
+        `;
 
         await this.DbManager.ingestData(insertQuery, values);
         processedCount += batch.length;
