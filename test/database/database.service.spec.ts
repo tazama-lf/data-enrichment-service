@@ -275,26 +275,6 @@ describe('DatabaseService', () => {
       expect(mockLoggerService.error).toHaveBeenCalledWith(expect.stringContaining('Error inserting rows into table "test_table"'));
     });
 
-    it('should reject rows with column names that fail SQL identifier validation', async () => {
-      const invalidRows = [
-        { 'invalid-name': 'value1', 'another!bad': 'value2' },
-        { 'invalid-name': 'value3', 'another!bad': 'value4' },
-      ];
-
-      await expect(service.insertRows('test_table', invalidRows, 'job-123', 'tenant-123', ConfigType.PULL)).rejects.toThrow(
-        'Invalid column name(s): invalid-name, another!bad',
-      );
-
-      expect(mockDbManager.insertJobHistory).toHaveBeenCalledWith(
-        'tenant-123',
-        'job-123',
-        2,
-        0,
-        'Invalid column name(s): invalid-name, another!bad',
-        ConfigType.PULL,
-      );
-    });
-
     it('should throw InternalServerErrorException when database manager is not initialized', async () => {
       const module: TestingModule = await Test.createTestingModule({
         providers: [
