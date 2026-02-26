@@ -668,11 +668,11 @@ describe('ExecutorService', () => {
 
       mockSchedulerRegistry.getCronJobs.mockReturnValue(new Map([['job-key', mockCronJob as unknown as CronJob]]));
 
-      mockJob.iterations = 2;
+      const job = { ...mockJob, iterations: 2 };
 
       mockRedisService.getJson.mockResolvedValue('2');
 
-      await service.handleFailure(mockJob, 'job-key');
+      await service.handleFailure(job, 'job-key');
 
       expect(mockRedisService.set).toHaveBeenCalledWith('job-key', 3, 86400);
       expect(mockCronJob.stop).toHaveBeenCalled();

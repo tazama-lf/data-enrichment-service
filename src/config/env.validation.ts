@@ -66,18 +66,21 @@ export class EnvironmentVariables {
   @IsString()
   STREAM_SUBJECT!: string;
 
+  @IsOptional()
   @IsBoolean()
-  APM_ACTIVE!: boolean;
+  APM_ACTIVE?: boolean;
 
+  @IsOptional()
   @IsString()
-  APM_URL!: string;
+  APM_URL?: string;
 
   @IsOptional()
   @IsString()
   APM_SECRET_TOKEN?: string;
 
+  @IsOptional()
   @IsString()
-  APM_SERVICE_NAME!: string;
+  APM_SERVICE_NAME?: string;
 
   @IsString()
   TAZAMA_AUTH_URL!: string;

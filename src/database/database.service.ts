@@ -212,6 +212,11 @@ export class DatabaseService implements OnModuleInit {
         throw new Error('No columns found in the data for insertion.');
       }
 
+      const invalidKeys = keys.filter((key) => !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key));
+      if (invalidKeys.length > 0) {
+        throw new Error(`Invalid column name(s): ${invalidKeys.join(', ')}`);
+      }
+
       this.loggerService.log(`Inserting ${rows.length} rows with ${keys.length} columns`);
 
       for (let i = 0; i < rows.length; i += this.batchSize) {
