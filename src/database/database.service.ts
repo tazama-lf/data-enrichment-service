@@ -65,7 +65,7 @@ export class DatabaseService implements OnModuleInit {
   }
 
   private readonly log_context = DatabaseService.name;
-  ERROR_PATTERNS: ErrorPattern[] = [
+  private readonly ERROR_PATTERNS: ErrorPattern[] = [
     {
       pattern: 'unique constraint',
       exception: ConflictException,

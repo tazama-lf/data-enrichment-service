@@ -154,9 +154,15 @@ describe('ExecutorService', () => {
     });
 
     it('should start cron job immediately', async () => {
+      const startSpy = jest.spyOn(CronJob.prototype, 'start').mockImplementation(() => {});
+
       await service.addCronJob(mockJob);
 
       const addCronJobCall = mockSchedulerRegistry.addCronJob.mock.calls[0];
+      expect(addCronJobCall[1]).toBeInstanceOf(CronJob);
+      expect(startSpy).toHaveBeenCalled();
+
+      startSpy.mockRestore();
     });
 
     it('should throw error when schedule_id is missing', async () => {

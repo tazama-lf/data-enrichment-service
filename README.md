@@ -132,13 +132,15 @@ The service will be available at `http://localhost:3001`
 | Variable               | Purpose                               | Example                                    | Required |
 | ---------------------- | ------------------------------------- | ------------------------------------------ | -------- |
 | `TAZAMA_AUTH_URL`      | Tazama authentication service URL     | `http://localhost:3020/v1/auth`            | Yes      |
+| `AUTH_PUBLIC_KEY_PATH` | Path to JWT public key for verification | `./public-key.pem`                        | Yes      |
+| `CERT_PATH_PUBLIC`     | Path to public certificate file       | `./cert-public.pem`                        | Yes      |
 
 ### Logging Variables
 
 | Variable          | Purpose                                   | Default | Example                  | Required |
 | ----------------- | ----------------------------------------- | ------- | ------------------------ | -------- |
-| `SIDECAR_HOST`    | Logstash sidecar host and port            | -       | `localhost:5000`         | Yes      |
-| `LOGSTASH_LEVEL`  | Logging level for Logstash                | `info`  | `info`, `debug`, `error` | Yes      |
+| `SIDECAR_HOST`    | Logstash sidecar host and port            | -       | `localhost:5000`         | No       |
+| `LOGSTASH_LEVEL`  | Logging level for Logstash                | `info`  | `info`, `debug`, `error` | No       |
 
 ## API
 
