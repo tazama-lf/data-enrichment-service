@@ -1,2 +1,281 @@
-# data-enrichment-service
-Data enrichment service
+# Data Enrichment Service
+
+## Overview
+
+High-performance middleware service for the Tazama FRMS (Fraud Risk Management System) that receives, validates, and enriches data.
+
+**Key Capabilities:**
+
+- Validates incoming transactions using JSON Schema
+- Enriches transaction data with additional context
+- Routes processed events via NATS messaging
+- Persists transaction relationships in PostgreSQL
+- Provides Redis caching for improved performance
+- Implements job queue processing for asynchronous tasks
+
+### Setting Up
+
+```sh
+git clone https://github.com/tazama-lf/data-enrichment-service
+cd data-enrichment-service
+```
+
+You then need to configure your environment: a [sample](.env.sample) configuration file has been provided and you may adapt that to your environment. Copy it to `.env` and modify as needed:
+
+```sh
+cp .env.sample .env
+```
+
+**Important Security Requirements:**
+1. Update all placeholder values in `.env` (especially database credentials marked with `<change_me>`)
+2. Never commit `.env` files containing real credentials to version control
+3. Ensure `.gitignore` includes `.env` to prevent accidental commits
+4. Use strong passwords for all database and service credentials
+5. For production deployments, use a secrets management service instead of `.env` files
+
+#### Prerequisites
+
+- Node.js 20+
+- PostgreSQL 15+
+- Redis 7+
+- NATS Server 2.10+
+
+#### Build and Start
+
+```sh
+npm install
+# Start required services (skip if full-stack-docker is already running)
+docker-compose up -d redis nats postgres
+npm run start:dev
+```
+
+The service will be available at `http://localhost:3001`
+
+## Configuration
+
+### Application Variables
+
+| Variable         | Purpose                                | Default | Example                  | Required |
+| ---------------- | -------------------------------------- | ------- | ------------------------ | -------- |
+| `FUNCTION_NAME`  | Service identifier                     | -       | `data-enrichment`        | Yes      |
+| `NODE_ENV`       | Application environment                | `dev`   | `dev`, `prod`, `test`    | Yes      |
+| `PORT`           | Port number for HTTP server            | `3001`  | `3001`, `3000`           | Yes      |
+| `MAX_CPU`        | Maximum CPU cores to use               | `1`     | `1`, `2`, `4`            | Yes      |
+| `SIZE`           | Maximum request body size              | `100mb` | `150mb`                  | Yes      |
+| `CORS_ORIGINS`   | Allowed CORS origins (comma-separated) | -       | `localhost,10.10.80.37`  | Yes      |
+| `SALT_ROUNDS`    | Password hashing rounds                | `10`     | `10`, `12`               | Yes      |
+| `ENCRYPTION_KEY` | AES-256 encryption key for sensitive data | -    | `32-byte UTF-8 string` | Yes |
+| `HTTP_TIMEOUT` | HTTP Timeout Limit  | -       | `3000`   | No      |
+
+### Database Variables
+
+| Variable                      | Purpose                                  | Example                                                  | Required |
+| ----------------------------- | ---------------------------------------- | -------------------------------------------------------- | -------- |
+| `CONFIGURATION_DATABASE_URL`  | PostgreSQL connection string             | `postgresql://postgres:password@localhost:5432/database` | Yes      |
+| `DB_HOST`                     | Database server hostname                 | `localhost`, `10.10.80.37`                               | Yes      |
+| `DB_PORT`                     | Database server port                     | `5432`                                                   | Yes      |
+| `DB_USER`                     | Database username                        | `admin`, `postgres`                                      | Yes      |
+| `DB_PASSWORD`                 | Database password                        | `your-secure-password`                                   | Yes      |
+| `DB_CERT_PATH`                | Path to SSL/TLS certificate (optional)   | `/path/to/cert.pem`                                      | No       |
+| `BATCH_SIZE`                  | Batch size for bulk operations           | `1000`, `500`                                            | No       |
+| `POSTGRES_CONTAINER_NAME`     | PostgreSQL Docker container name         | `my_postgres`                                            | No       |
+| `POSTGRES_PORT`               | PostgreSQL port (Docker only)            | `5432`                                                   | No       |
+| `POSTGRES_USER`               | PostgreSQL username (Docker only)        | `postgres`                                               | No       |
+| `POSTGRES_PASSWORD`           | PostgreSQL password (Docker only)        | `postgres`                                               | No       |
+| `POSTGRES_DB`                 | PostgreSQL database name (Docker only)   | `mydb`                                                   | No       |
+
+**Security Notes:**
+- Never commit database credentials to version control
+- Use strong passwords for production environments
+- Consider using secrets management services (AWS Secrets Manager, Azure Key Vault, etc.) in production
+- Enable SSL/TLS connections using `DB_CERT_PATH` for production databases
+- The service validates all required DB variables at startup and will fail if credentials are missing
+
+**Note:** The connection string format is `postgresql://[user[:password]@][host][:port][/database]`
+
+### Redis Cache Variables
+
+| Variable                | Purpose                       | Default | Example                    | Required |
+| ----------------------- | ----------------------------- | ------- | -------------------------- | -------- |
+| `REDIS_HOST`            | Redis server hostname         | -       | `localhost`, `10.10.80.37` | Yes      |
+| `REDIS_PORT`            | Redis server port             | `6379`  | `6379`                     | Yes      |
+| `REDIS_PASSWORD`        | Redis authentication password | -       | `redis-password`           | Yes      |
+| `REDIS_CONTAINER_NAME`  | Redis Docker container name   | -       | `data-enrichment-redis`    | No       |
+| `CACHE_TTL`             | Cache time-to-live (seconds)  | `3600`  | `86400`                    | Yes      |
+
+### NATS Messaging Variables
+
+| Variable               | Purpose                              | Example                        | Required |
+| ---------------------- | ------------------------------------ | ------------------------------ | -------- |
+| `SERVER_URL`           | NATS server address (host:port)      | `localhost:4222`             | Yes      |
+| `STARTUP_TYPE`         | Service startup type                 | `nats`                         | Yes      |
+| `PRODUCER_STREAM`      | Stream name for outbound messages    | `config.notification.response` | Yes      |
+| `CONSUMER_STREAM`      | Stream name for inbound messages     | `config.notification`          | Yes      |
+| `STREAM_SUBJECT`       | NATS subject for configuration       | `config.notification`          | Yes      |
+| `NATS_CONTAINER_NAME`  | NATS Docker container name           | `data-enrichment-nats`         | No       |
+| `NATS_PORT`            | NATS client port                     | `4222`                         | No       |
+| `NATS_HTTP_PORT`       | NATS HTTP monitoring port            | `8222`                         | No       |
+
+**Note:** `SERVER_URL` should be in format `host:port` without protocol prefix (e.g., `10.10.80.34:4222`, not `nats://10.10.80.34:4222`).
+
+### APM (Application Performance Monitoring) Variables
+
+| Variable            | Purpose                       | Example                         | Required |
+| ------------------- | ----------------------------- | ------------------------------- | -------- |
+| `APM_ACTIVE`        | Enable/disable APM monitoring | `true`, `false`                 | No       |
+| `APM_URL`           | Elastic APM server URL        | `http://localhost:8200`         | No       |
+| `APM_SECRET_TOKEN`  | APM authentication token      | `your-secret-token`             | No       |
+| `APM_SERVICE_NAME`  | Service name in APM           | `data-enrichment`               | No       |
+
+### Authentication Variables
+
+| Variable               | Purpose                               | Example                                    | Required |
+| ---------------------- | ------------------------------------- | ------------------------------------------ | -------- |
+| `TAZAMA_AUTH_URL`      | Tazama authentication service URL     | `http://localhost:3020/v1/auth`            | Yes      |
+| `AUTH_PUBLIC_KEY_PATH` | Path to JWT public key for verification | `./public-key.pem`                        | Yes      |
+| `CERT_PATH_PUBLIC`     | Path to public certificate file       | `./cert-public.pem`                        | Yes      |
+
+### Logging Variables
+
+| Variable          | Purpose                                   | Default | Example                  | Required |
+| ----------------- | ----------------------------------------- | ------- | ------------------------ | -------- |
+| `SIDECAR_HOST`    | Logstash sidecar host and port            | -       | `localhost:5000`         | No       |
+| `LOGSTASH_LEVEL`  | Logging level for Logstash                | `info`  | `info`, `debug`, `error` | No       |
+
+## API
+
+### 1. Process Enrichment
+
+#### Description
+
+Validates, enriches, and processes data.
+
+**Endpoint:** `POST /{endpoint}`
+
+**Headers:**
+- `Authorization: Bearer <jwt-token>`
+- `Content-Type: application/json`
+
+**Request Body:**
+
+```json
+{
+  "body": {
+    "Name": "John Doe",
+    "country": "USA",
+    "city": "New York",
+    "email": "john.doe@example.com"
+  }
+}
+```
+
+#### Response
+
+- **Status Code:** 200 OK
+- **Content-Type:** application/json
+- **Body:**
+
+```json
+{
+  "message": "Data Enriched Successfully",
+  "success": true
+}
+```
+
+## Internal Process Flow
+
+### Push Job Flow
+
+Push jobs are triggered by external API calls and process data immediately.
+
+```mermaid
+sequenceDiagram
+    participant Client as Client/Service
+    participant DEAPI as Data Enrichment Service
+    participant Redis as Redis Cache
+    participant DB as PostgreSQL
+    
+    Client->>DEAPI: 1. POST /{endpoint} (with JWT)
+    DEAPI->>DEAPI: 2. Validate JWT token
+    DEAPI->>Redis: 3. Fetch job config from cache
+    Redis-->>DEAPI: Job configuration
+    DEAPI->>DEAPI: 4. Validate data against schema
+    alt Validation Failed
+        DEAPI-->>Client: 400: Validation errors
+    else Validation Passed
+    end
+    DEAPI->>DEAPI: 5. Transform & enrich data
+    DEAPI->>DB: 6. Store enriched data
+    DEAPI-->>Client: 7. 200: Success response
+```
+
+### Pull Job Flow
+
+Pull jobs are scheduled via NATS notifications and execute based on cron expressions.
+
+```mermaid
+sequenceDiagram
+    participant TCS as TCS Configuration Service
+    participant NATS as NATS Server
+    participant DEAPI as Data Enrichment Service
+    participant Source as External Source (HTTP/SFTP)
+    participant DB as PostgreSQL
+    
+    TCS->>NATS: 1. Publish job configuration
+    NATS->>DEAPI: 2. Notify job activation
+    DEAPI->>DEAPI: 3. Schedule cron job
+    Note over DEAPI: Wait for cron trigger
+    DEAPI->>Source: 4. Fetch data (HTTP/SFTP)
+    Source-->>DEAPI: Raw data (JSON/CSV/TSV)
+    DEAPI->>DEAPI: 5. Transform to JSON
+    alt Transformation Failed
+        DEAPI->>DEAPI: Increment failure count
+        DEAPI->>DEAPI: Remove job if limit reached
+    end
+    DEAPI->>DB: 6. Ingest transformed data
+    DEAPI->>NATS: 7. Send ACK/NACK response
+```
+
+## Testing
+
+Run the test suite to validate functionality:
+
+```sh
+# Run all tests
+npm run test
+
+# Run tests with coverage
+npm run test:cov
+
+# Run tests in watch mode
+npm run test:watch
+```
+
+## Troubleshooting
+
+### Service won't start
+
+**Issue:** `npm install` fails
+- Ensure Node.js 20+ is installed
+- Check network access to npm registry
+
+**Issue:** Database connection errors
+- Verify PostgreSQL is running: `docker ps` or check service status
+- Confirm credentials in `.env` match your database
+- Ensure all required DB variables are set: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`
+- The service will fail to start if any required database credentials are missing
+- Check database logs for authentication failures
+
+**Issue:** Redis connection errors
+- Check Redis is running: `docker ps` or service status
+- Verify `REDIS_HOST`, `REDIS_PORT`, and `REDIS_PASSWORD` in `.env`
+
+**Issue:** NATS messaging failures
+- Check NATS server is running: `docker ps` or service status
+- Verify `SERVER_URL` in `.env`
+
+### Authentication Errors
+
+- Verify JWT token is valid and not expired
+- Ensure `TAZAMA_AUTH_URL` is reachable and responding
+- The public key file is readable by the service: `cat public-key.pem`

@@ -1,0 +1,17 @@
+# compiled output
+/dist
+node_modules
+**/node_modules
+npm-debug.log
+yarn-error.log
+.vscode
+
+# OS files
+.DS_Store
+
+# env files
+.env
+.env.*.local
+
+coverage
+*.lcov
