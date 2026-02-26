@@ -297,7 +297,7 @@ export class DatabaseService implements OnModuleInit {
       }
 
       await this.ensureTable(tableName);
-      const arr = Array.isArray(data) ? data : data && typeof data === 'object' ? [data] : [];
+      const arr = Array.isArray(data) ? data : Object.values(data as Record<string, unknown>).flat();
 
       if (arr.length === 0) {
         throw new Error('No valid data provided for table update.');

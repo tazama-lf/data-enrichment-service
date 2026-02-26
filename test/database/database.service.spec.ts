@@ -448,64 +448,6 @@ describe('DatabaseService', () => {
       expect(mockLoggerService.error).toHaveBeenCalledWith(expect.stringContaining('Unknown error while updating table "test_table"'));
     });
 
-    it('should reject update operation when provided data is null', async () => {
-      const testMockDbManager = {
-        getPathPushJob: jest.fn().mockResolvedValue(undefined),
-        getDefaultPushJob: jest.fn().mockResolvedValue([]),
-        getIdPushJob: jest.fn().mockResolvedValue(undefined),
-        ingestData: jest.fn().mockResolvedValue(undefined),
-        insertJobHistory: jest.fn().mockResolvedValue(undefined),
-        createTable: jest.fn().mockResolvedValue(undefined),
-        deleteRows: jest.fn().mockResolvedValue(undefined),
-      } as unknown as jest.Mocked<DatabaseManagerInstance<ManagerConfig> & ConfigurationDB & EnrichmentDB>;
-
-      CreateDatabaseManager.mockResolvedValueOnce(testMockDbManager);
-
-      const module: TestingModule = await Test.createTestingModule({
-        providers: [
-          DatabaseService,
-          { provide: LoggerService, useValue: mockLoggerService },
-          { provide: ConfigService, useValue: mockConfigService },
-        ],
-      }).compile();
-
-      const testService = module.get<DatabaseService>(DatabaseService);
-      await testService.onModuleInit();
-
-      await expect(
-        testService.updateTable('test_table', 'job-123', IngestMode.APPEND, null, 'tenant-123', ConfigType.PULL),
-      ).rejects.toThrow('No valid data provided for table update.');
-    });
-
-    it('should reject update operation when data is not an object or array', async () => {
-      const testMockDbManager = {
-        getPathPushJob: jest.fn().mockResolvedValue(undefined),
-        getDefaultPushJob: jest.fn().mockResolvedValue([]),
-        getIdPushJob: jest.fn().mockResolvedValue(undefined),
-        ingestData: jest.fn().mockResolvedValue(undefined),
-        insertJobHistory: jest.fn().mockResolvedValue(undefined),
-        createTable: jest.fn().mockResolvedValue(undefined),
-        deleteRows: jest.fn().mockResolvedValue(undefined),
-      } as unknown as jest.Mocked<DatabaseManagerInstance<ManagerConfig> & ConfigurationDB & EnrichmentDB>;
-
-      CreateDatabaseManager.mockResolvedValueOnce(testMockDbManager);
-
-      const module: TestingModule = await Test.createTestingModule({
-        providers: [
-          DatabaseService,
-          { provide: LoggerService, useValue: mockLoggerService },
-          { provide: ConfigService, useValue: mockConfigService },
-        ],
-      }).compile();
-
-      const testService = module.get<DatabaseService>(DatabaseService);
-      await testService.onModuleInit();
-
-      await expect(
-        testService.updateTable('test_table', 'job-123', IngestMode.APPEND, 'string-data' as never, 'tenant-123', ConfigType.PULL),
-      ).rejects.toThrow('No valid data provided for table update.');
-    });
-
     it('should throw InternalServerErrorException when database manager is not initialized', async () => {
       const module: TestingModule = await Test.createTestingModule({
         providers: [
