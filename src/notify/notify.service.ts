@@ -99,7 +99,7 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
 
     const { endpointId, configType } = payload;
     try {
-      const record = (await this.db.getPushJobById(configType, endpointId)) as PushJob | Job | undefined;
+      const record = (await this.db.getJobById(configType, endpointId)) as PushJob | Job | undefined;
 
       if (!record) {
         this.logger.warn(`No record found for endpointId: ${endpointId}`);
