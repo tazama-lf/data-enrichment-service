@@ -276,7 +276,7 @@ describe('JobService', () => {
         mockRedisService.getJson.mockResolvedValue(JSON.stringify(notDeployedEndpoint));
 
         await expect(service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' })).rejects.toThrow(
-          new BadRequestException('Endpoint not deployed or not active.'),
+          new BadRequestException('Endpoint not deployed/approved or not active.'),
         );
       });
 
@@ -285,7 +285,7 @@ describe('JobService', () => {
         mockRedisService.getJson.mockResolvedValue(JSON.stringify(inactiveEndpoint));
 
         await expect(service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' })).rejects.toThrow(
-          new BadRequestException('Endpoint not deployed or not active.'),
+          new BadRequestException('Endpoint not deployed/approved or not active.'),
         );
       });
 
@@ -298,7 +298,7 @@ describe('JobService', () => {
         mockRedisService.getJson.mockResolvedValue(JSON.stringify(invalidEndpoint));
 
         await expect(service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' })).rejects.toThrow(
-          new BadRequestException('Endpoint not deployed or not active.'),
+          new BadRequestException('Endpoint not deployed/approved or not active.'),
         );
       });
 
@@ -306,6 +306,19 @@ describe('JobService', () => {
         const validEndpoint = {
           ...mockEndpoint,
           status: JobStatus.DEPLOYED,
+          publishing_status: ScheduleStatus.ACTIVE,
+        };
+        mockRedisService.getJson.mockResolvedValue(JSON.stringify(validEndpoint));
+
+        const result = await service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
+
+        expect(result.success).toBe(true);
+      });
+
+      it('should accept endpoint with APPROVED status and ACTIVE publishing_status', async () => {
+        const validEndpoint = {
+          ...mockEndpoint,
+          status: JobStatus.APPROVED,
           publishing_status: ScheduleStatus.ACTIVE,
         };
         mockRedisService.getJson.mockResolvedValue(JSON.stringify(validEndpoint));
