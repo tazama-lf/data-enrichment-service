@@ -57,8 +57,9 @@ export class JobService {
         this.loggerService.log(`Cached endpoint for path: ${path}`);
       }
 
-      if (endpoint.status !== JobStatus.DEPLOYED || endpoint.publishing_status !== ScheduleStatus.ACTIVE) {
-        throw new BadRequestException('Endpoint not deployed or not active.');
+      const allowedStatuses = [JobStatus.DEPLOYED, JobStatus.APPROVED];
+      if (!allowedStatuses.includes(endpoint.status) || endpoint.publishing_status !== ScheduleStatus.ACTIVE) {
+        throw new BadRequestException('Endpoint not deployed/approved or not active.');
       }
 
       const items = Array.isArray(body.data) ? body.data : [body.data];
