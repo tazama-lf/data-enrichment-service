@@ -1,3 +1,11 @@
+// Set required environment variables before imports
+process.env.STARTUP_TYPE = process.env.STARTUP_TYPE || 'nats';
+process.env.SERVER_URL = process.env.SERVER_URL || 'nats://localhost:4222';
+process.env.CONSUMER_STREAM = process.env.CONSUMER_STREAM || 'config.notification';
+process.env.PRODUCER_STREAM = process.env.PRODUCER_STREAM || 'config.notification.response';
+process.env.FUNCTION_NAME = process.env.FUNCTION_NAME || 'data-enrichment-service';
+process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '12345678901234567890123456789012';
+
 import { Test, type TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
