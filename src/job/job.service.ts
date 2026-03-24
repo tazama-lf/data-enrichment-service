@@ -57,8 +57,12 @@ export class JobService {
         this.loggerService.log(`Cached endpoint for path: ${path}`);
       }
 
+      this.loggerService.log(`Endpoint status: ${endpoint.status}, publishing_status: ${endpoint.publishing_status}`);
       const allowedStatuses = [JobStatus.DEPLOYED, JobStatus.APPROVED];
       if (!allowedStatuses.includes(endpoint.status) || endpoint.publishing_status !== ScheduleStatus.ACTIVE) {
+        this.loggerService.error(
+          `Status validation failed. Status: ${endpoint.status}, Publishing Status: ${endpoint.publishing_status}, Allowed: ${allowedStatuses.join(', ')}, Expected Publishing: ${ScheduleStatus.ACTIVE}`,
+        );
         throw new BadRequestException('Endpoint not deployed/approved or not active.');
       }
 
