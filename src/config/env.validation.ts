@@ -1,4 +1,4 @@
-import { plainToClass } from 'class-transformer';
+import { plainToClass, Transform } from 'class-transformer';
 import { IsBoolean, IsEnum, IsNumber, IsNumberString, IsOptional, IsString, validateSync } from 'class-validator';
 
 export enum NodeEnv {
@@ -67,6 +67,7 @@ export class EnvironmentVariables {
   STREAM_SUBJECT!: string;
 
   @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()
   APM_ACTIVE?: boolean;
 
