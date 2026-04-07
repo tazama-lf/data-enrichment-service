@@ -14,7 +14,7 @@ import {
   SourceType,
 } from '@tazama-lf/tcs-lib';
 import { CronJob } from 'cron';
-import { parse } from 'csv-parse/sync';
+import { parse } from 'csv-parse';
 import * as iconv from 'iconv-lite';
 import { firstValueFrom } from 'rxjs';
 import SFTPClient from 'ssh2-sftp-client';
