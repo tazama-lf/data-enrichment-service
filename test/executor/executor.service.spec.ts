@@ -198,6 +198,25 @@ describe('ExecutorService', () => {
         'Cannot schedule job job-123: missing schedule_id or cron expression',
       );
     });
+
+    it('should replace existing cron job if one already exists', async () => {
+      const mockExistingJob = {
+        stop: jest.fn().mockResolvedValue(undefined),
+      };
+      mockSchedulerRegistry.getCronJobs.mockReturnValue(
+        new Map([['job-job-123-schedule-schedule-789', mockExistingJob as unknown as CronJob]]),
+      );
+
+      await service.addCronJob(mockJob);
+
+      expect(mockLoggerService.warn).toHaveBeenCalledWith(
+        'Cron job job-job-123-schedule-schedule-789 already exists. Stopping and replacing.',
+      );
+      expect(mockExistingJob.stop).toHaveBeenCalled();
+      expect(mockSchedulerRegistry.deleteCronJob).toHaveBeenCalledWith('job-job-123-schedule-schedule-789');
+      expect(mockSchedulerRegistry.addCronJob).toHaveBeenCalled();
+      expect(mockLoggerService.log).toHaveBeenCalledWith('Cron Job Scheduled with key job-job-123-schedule-schedule-789');
+    });
   });
 
   describe('deleteCronJob', () => {
