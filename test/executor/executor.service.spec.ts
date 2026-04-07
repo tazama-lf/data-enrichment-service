@@ -106,14 +106,6 @@ describe('ExecutorService', () => {
       deleteCronJob: jest.fn(),
     } as unknown as jest.Mocked<SchedulerRegistry>;
 
-    // Helper function to create a readable stream from buffer
-    const createMockStream = (buffer: Buffer) => {
-      const stream = new Readable();
-      stream.push(buffer);
-      stream.push(null);
-      return stream;
-    };
-
     mockSftpClient = {
       connect: jest.fn().mockResolvedValue(undefined),
       exists: jest.fn().mockResolvedValue(true),
