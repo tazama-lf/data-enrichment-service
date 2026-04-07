@@ -9,6 +9,7 @@ import { ExecutorService } from '../../src/executor/executor.service';
 import { of, throwError } from 'rxjs';
 import SFTPClient from 'ssh2-sftp-client';
 import { ConfigService } from '@nestjs/config';
+import { Readable } from 'stream';
 
 jest.mock('../../src/apm/apm.decorators', () => ({
   ApmSpan: () => (target: unknown, propertyKey: string, descriptor: PropertyDescriptor) => descriptor,
@@ -89,10 +90,19 @@ describe('ExecutorService', () => {
       deleteCronJob: jest.fn(),
     } as unknown as jest.Mocked<SchedulerRegistry>;
 
+    // Helper function to create a readable stream from buffer
+    const createMockStream = (buffer: Buffer) => {
+      const stream = new Readable();
+      stream.push(buffer);
+      stream.push(null);
+      return stream;
+    };
+
     mockSftpClient = {
       connect: jest.fn().mockResolvedValue(undefined),
       exists: jest.fn().mockResolvedValue(true),
       get: jest.fn().mockResolvedValue(Buffer.from('{"key":"value"}')),
+      createReadStream: jest.fn().mockReturnValue(createMockStream(Buffer.from('{"key":"value"}'))),
       end: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<SFTPClient>;
 
@@ -417,6 +427,13 @@ describe('ExecutorService', () => {
 
   describe('handleSftpJob', () => {
     it('should successfully process SFTP job with JSON file', async () => {
+      // Setup a successful stream
+      const buffer = Buffer.from('{"key":"value"}');
+      const stream = new Readable();
+      stream.push(buffer);
+      stream.push(null);
+      mockSftpClient.createReadStream.mockReturnValue(stream);
+
       const sftpJob: Job = {
         ...mockJob,
         source_type: SourceType.SFTP,
@@ -437,7 +454,7 @@ describe('ExecutorService', () => {
       await service.handleSftpJob(sftpJob, 'job-key');
 
       expect(mockSftpClient.exists).toHaveBeenCalledWith('/data/test.json');
-      expect(mockSftpClient.get).toHaveBeenCalledWith('/data/test.json');
+      expect(mockSftpClient.createReadStream).toHaveBeenCalledWith('/data/test.json', { autoClose: true });
       expect(mockDatabaseService.updateTable).toHaveBeenCalledWith(
         'tenant-456_test_table',
         'job-123',
@@ -515,7 +532,11 @@ describe('ExecutorService', () => {
         },
       };
 
-      mockSftpClient.get.mockRejectedValue(new Error('Read error'));
+      const errorStream = new Readable();
+      errorStream._read = () => {
+        errorStream.destroy(new Error('Read error'));
+      };
+      mockSftpClient.createReadStream.mockReturnValue(errorStream);
 
       await service.handleSftpJob(sftpJob, 'job-key');
 
@@ -523,6 +544,13 @@ describe('ExecutorService', () => {
     });
 
     it('should reset failure count to 0 on success', async () => {
+      // Reset the mock to return a successful stream
+      const buffer = Buffer.from('{"key":"value"}');
+      const stream = new Readable();
+      stream.push(buffer);
+      stream.push(null);
+      mockSftpClient.createReadStream.mockReturnValue(stream);
+
       const sftpJob: Job = {
         ...mockJob,
         source_type: SourceType.SFTP,
@@ -548,7 +576,11 @@ describe('ExecutorService', () => {
 
   describe('transformFileToJSON', () => {
     it('should transform JSON file to array of objects', async () => {
-      mockSftpClient.get.mockResolvedValue(Buffer.from('{"name":"test","value":123}'));
+      const buffer = Buffer.from('{"name":"test","value":123}');
+      const stream = new Readable();
+      stream.push(buffer);
+      stream.push(null);
+      mockSftpClient.createReadStream.mockReturnValue(stream);
       const file = { path: '/data/test.json', file_type: FileType.JSON, delimiter: '' };
 
       const result = await service.transformFileToJSON(mockSftpClient, file);
@@ -557,7 +589,11 @@ describe('ExecutorService', () => {
     });
 
     it('should handle JSON array', async () => {
-      mockSftpClient.get.mockResolvedValue(Buffer.from('[{"id":1},{"id":2}]'));
+      const buffer = Buffer.from('[{"id":1},{"id":2}]');
+      const stream = new Readable();
+      stream.push(buffer);
+      stream.push(null);
+      mockSftpClient.createReadStream.mockReturnValue(stream);
       const file = { path: '/data/test.json', file_type: FileType.JSON, delimiter: '' };
 
       const result = await service.transformFileToJSON(mockSftpClient, file);
@@ -566,7 +602,11 @@ describe('ExecutorService', () => {
     });
 
     it('should return empty array for non-object JSON', async () => {
-      mockSftpClient.get.mockResolvedValue(Buffer.from('"just a string"'));
+      const buffer = Buffer.from('"just a string"');
+      const stream = new Readable();
+      stream.push(buffer);
+      stream.push(null);
+      mockSftpClient.createReadStream.mockReturnValue(stream);
       const file = { path: '/data/test.json', file_type: FileType.JSON, delimiter: '' };
 
       const result = await service.transformFileToJSON(mockSftpClient, file);
@@ -575,7 +615,11 @@ describe('ExecutorService', () => {
     });
 
     it('should return empty array for null JSON', async () => {
-      mockSftpClient.get.mockResolvedValue(Buffer.from('null'));
+      const buffer = Buffer.from('null');
+      const stream = new Readable();
+      stream.push(buffer);
+      stream.push(null);
+      mockSftpClient.createReadStream.mockReturnValue(stream);
       const file = { path: '/data/test.json', file_type: FileType.JSON, delimiter: '' };
 
       const result = await service.transformFileToJSON(mockSftpClient, file);
@@ -585,7 +629,11 @@ describe('ExecutorService', () => {
 
     it('should transform CSV file to array of objects', async () => {
       const csvContent = 'Name,Age,City\nJohn,30,NYC\nJane,25,LA';
-      mockSftpClient.get.mockResolvedValue(Buffer.from(csvContent));
+      const buffer = Buffer.from(csvContent);
+      const stream = new Readable();
+      stream.push(buffer);
+      stream.push(null);
+      mockSftpClient.createReadStream.mockReturnValue(stream);
       const file = { path: '/data/test.csv', file_type: FileType.CSV, delimiter: ',' };
 
       const result = await service.transformFileToJSON(mockSftpClient, file);
@@ -598,7 +646,11 @@ describe('ExecutorService', () => {
 
     it('should transform TSV file to array of objects', async () => {
       const tsvContent = 'Name\tAge\tCity\nJohn\t30\tNYC\nJane\t25\tLA';
-      mockSftpClient.get.mockResolvedValue(Buffer.from(tsvContent));
+      const buffer = Buffer.from(tsvContent);
+      const stream = new Readable();
+      stream.push(buffer);
+      stream.push(null);
+      mockSftpClient.createReadStream.mockReturnValue(stream);
       const file = { path: '/data/test.tsv', file_type: FileType.TSV, delimiter: '' };
 
       const result = await service.transformFileToJSON(mockSftpClient, file);
@@ -611,7 +663,11 @@ describe('ExecutorService', () => {
 
     it('should handle CSV with custom delimiter', async () => {
       const csvContent = 'Name;Age;City\nJohn;30;NYC\nJane;25;LA';
-      mockSftpClient.get.mockResolvedValue(Buffer.from(csvContent));
+      const buffer = Buffer.from(csvContent);
+      const stream = new Readable();
+      stream.push(buffer);
+      stream.push(null);
+      mockSftpClient.createReadStream.mockReturnValue(stream);
       const file = { path: '/data/test.csv', file_type: FileType.CSV, delimiter: ';' };
 
       const result = await service.transformFileToJSON(mockSftpClient, file);
@@ -624,7 +680,11 @@ describe('ExecutorService', () => {
 
     it('should normalize column headers', async () => {
       const csvContent = 'First Name,Last Name,Email Address\nJohn,Doe,john@example.com';
-      mockSftpClient.get.mockResolvedValue(Buffer.from(csvContent));
+      const buffer = Buffer.from(csvContent);
+      const stream = new Readable();
+      stream.push(buffer);
+      stream.push(null);
+      mockSftpClient.createReadStream.mockReturnValue(stream);
       const file = { path: '/data/test.csv', file_type: FileType.CSV, delimiter: ',' };
 
       const result = await service.transformFileToJSON(mockSftpClient, file);
@@ -635,14 +695,23 @@ describe('ExecutorService', () => {
     });
 
     it('should throw error for non-buffer data', async () => {
-      mockSftpClient.get.mockResolvedValue('string data' as never);
+      // Test with a stream that emits invalid JSON
+      const stream = new Readable();
+      stream.push('string data'); // Valid string but invalid JSON
+      stream.push(null);
+      mockSftpClient.createReadStream.mockReturnValue(stream);
       const file = { path: '/data/test.json', file_type: FileType.JSON, delimiter: '' };
 
-      await expect(service.transformFileToJSON(mockSftpClient, file)).rejects.toThrow('SFTP returned non-buffer data (stream or string)');
+      // Should throw because "string data" is not valid JSON
+      await expect(service.transformFileToJSON(mockSftpClient, file)).rejects.toThrow();
     });
 
     it('should log and rethrow transformation errors', async () => {
-      mockSftpClient.get.mockResolvedValue(Buffer.from('invalid json{'));
+      const buffer = Buffer.from('invalid json{');
+      const stream = new Readable();
+      stream.push(buffer);
+      stream.push(null);
+      mockSftpClient.createReadStream.mockReturnValue(stream);
       const file = { path: '/data/test.json', file_type: FileType.JSON, delimiter: '' };
 
       await expect(service.transformFileToJSON(mockSftpClient, file)).rejects.toThrow();
@@ -725,6 +794,13 @@ describe('ExecutorService', () => {
     });
 
     it('should execute SFTP job successfully', async () => {
+      // Reset the mock to return a successful stream
+      const buffer = Buffer.from('{"key":"value"}');
+      const stream = new Readable();
+      stream.push(buffer);
+      stream.push(null);
+      mockSftpClient.createReadStream.mockReturnValue(stream);
+
       const sftpJob: Job = {
         ...mockJob,
         source_type: SourceType.SFTP,
