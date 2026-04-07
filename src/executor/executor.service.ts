@@ -22,7 +22,6 @@ import { ApmSpan } from '../apm/apm.decorators';
 import { DatabaseService } from '../database/database.service';
 import { decrypt, getJobKey, isValidText } from '../utils/helpers';
 import { pipeline } from 'node:stream/promises';
-
 @Injectable()
 export class ExecutorService {
   private readonly cacheTtl: number;
