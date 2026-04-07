@@ -14,7 +14,7 @@ import {
   SourceType,
 } from '@tazama-lf/tcs-lib';
 import { CronJob } from 'cron';
-import { parse } from 'csv-parse/sync';
+import { parse } from 'csv-parse';
 import * as iconv from 'iconv-lite';
 import { firstValueFrom } from 'rxjs';
 import SFTPClient from 'ssh2-sftp-client';
@@ -155,28 +155,40 @@ export class ExecutorService {
 
   @ApmSpan('transform-file-json')
   async transformFileToJSON(sftp: SFTPClient, file: FileSettings): Promise<Array<Record<string, unknown>>> {
+    const records: Array<Record<string, unknown>> = [];
+
     try {
-      const fileData = await sftp.get(file.path);
-
-      if (!(Buffer.isBuffer(fileData) || fileData instanceof Uint8Array)) {
-        throw new Error('SFTP returned non-buffer data (stream or string)');
-      }
-
-      const decoded = iconv.decode(fileData, 'utf8');
-
-      if (!isValidText(decoded)) {
-        throw new Error('Invalid text after decoding');
-      }
+      const readStream = sftp.createReadStream(file.path, {
+        autoClose: true,
+      });
 
       if (file.file_type === FileType.JSON) {
+        const chunks: Buffer[] = [];
+
+        await pipeline(readStream, async function (source) {
+          for await (const chunk of source) {
+            chunks.push(chunk as Buffer);
+          }
+        });
+
+        const buffer = Buffer.concat(chunks);
+        const decoded = iconv.decode(buffer, 'utf8');
+
+        if (!isValidText(decoded)) {
+          throw new Error('Invalid text after decoding');
+        }
+
         const raw: unknown = JSON.parse(decoded);
         if (Array.isArray(raw)) return raw as Array<Record<string, unknown>>;
-        if (typeof raw === 'object' && raw !== null) return [raw as Record<string, unknown>];
+        if (typeof raw === 'object' && raw !== null) {
+          return [raw as Record<string, unknown>];
+        }
         return [];
       }
 
       const delimiter = file.file_type === FileType.CSV ? (file.delimiter ?? ',') : '\t';
-      const records = parse(decoded, {
+
+      const parser = parse({
         delimiter,
         columns: (headers: string[]) =>
           headers.map((h) =>
@@ -194,13 +206,21 @@ export class ExecutorService {
         escape: '"',
         record_delimiter: ['\r\n', '\n', '\r'],
       });
-      return records as Array<Record<string, unknown>>;
+
+      await pipeline(readStream, iconv.decodeStream('utf8'), parser, async function (source) {
+        for await (const record of source) {
+          records.push(record as Record<string, unknown>);
+        }
+      });
+
+      return records;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       this.loggerService.error(`Error transforming file: ${message}`);
       throw error;
     }
   }
+
   @ApmSpan('cron-job-delete')
   async deleteCronJob(jobId: string, scheduleId: string): Promise<void> {
     this.loggerService.log('Executing Delete cron Job');
