@@ -164,10 +164,9 @@ export class ExecutorService {
       if (file.file_type === FileType.JSON) {
         const chunks: Buffer[] = [];
 
-        await pipeline(readStream, async function* (source) {
+        await pipeline(readStream, async function (source) {
           for await (const chunk of source) {
             chunks.push(chunk as Buffer);
-            yield;
           }
         });
 
@@ -207,10 +206,9 @@ export class ExecutorService {
         record_delimiter: ['\r\n', '\n', '\r'],
       });
 
-      await pipeline(readStream, iconv.decodeStream('utf8'), parser, async function* (source) {
+      await pipeline(readStream, iconv.decodeStream('utf8'), parser, async function (source) {
         for await (const record of source) {
           records.push(record as Record<string, unknown>);
-          yield;
         }
       });
 
