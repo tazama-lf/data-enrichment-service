@@ -206,14 +206,7 @@ export class ExecutorService {
         escape: '"',
         record_delimiter: ['\r\n', '\n', '\r'],
       });
-
-      await pipeline(readStream, iconv.decodeStream('utf8'), parser, async function (source) {
-        for await (const record of source) {
-          records.push(record as Record<string, unknown>);
-        }
-      });
-
-      return records;
+      return records as Array<Record<string, unknown>>;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       this.loggerService.error(`Error transforming file: ${message}`);
