@@ -14,7 +14,7 @@ import {
   SourceType,
 } from '@tazama-lf/tcs-lib';
 import { CronJob } from 'cron';
-import { parse } from 'csv-parse/sync';
+import { parse } from 'csv-parse';
 import * as iconv from 'iconv-lite';
 import { firstValueFrom } from 'rxjs';
 import SFTPClient from 'ssh2-sftp-client';
@@ -206,7 +206,14 @@ export class ExecutorService {
         escape: '"',
         record_delimiter: ['\r\n', '\n', '\r'],
       });
-      return records as Array<Record<string, unknown>>;
+
+      await pipeline(readStream, iconv.decodeStream('utf8'), parser, async function (source) {
+        for await (const record of source) {
+          records.push(record as Record<string, unknown>);
+        }
+      });
+
+      return records;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       this.loggerService.error(`Error transforming file: ${message}`);
