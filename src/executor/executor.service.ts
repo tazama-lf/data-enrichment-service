@@ -167,6 +167,7 @@ export class ExecutorService {
         await pipeline(readStream, async function (source) {
           for await (const chunk of source) {
             chunks.push(chunk as Buffer);
+            yield;
           }
         });
 
@@ -209,6 +210,7 @@ export class ExecutorService {
       await pipeline(readStream, iconv.decodeStream('utf8'), parser, async function (source) {
         for await (const record of source) {
           records.push(record as Record<string, unknown>);
+          yield;
         }
       });
 
