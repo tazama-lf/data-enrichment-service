@@ -185,7 +185,7 @@ export class DatabaseService implements OnModuleInit {
       return await this.DbManager.getIdPushJob(type, id);
     } catch (error) {
       this.handleDatabaseError(error, 'push job', {
-        details: `push job for tenant ${id}`,
+        details: `${type} job for tenant ${id}`,
       });
     }
   }
