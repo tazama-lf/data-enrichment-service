@@ -228,7 +228,7 @@ describe('NotifyService', () => {
       expect(mockLoggerService.log).toHaveBeenCalledWith(expect.stringContaining('RECEIVING MESSAGE'));
       expect(mockDatabaseService.getJobById).toHaveBeenCalledWith(ConfigType.PUSH, 'push-123');
       expect(mockRedisService.setJson).toHaveBeenCalledWith('/api/push-endpoint', JSON.stringify(mockPushJob), 86400);
-      expect(mockLoggerService.log).toHaveBeenCalledWith('Updated cache for key: /api/push-endpoint');
+      expect(mockLoggerService.log).toHaveBeenCalledWith('Updated cache for key: /api/push-endpoint with publishing_status : active');
       expect(handleResponse).toHaveBeenCalledWith({
         endpointId: 'push-123',
         status: 'ACK',
