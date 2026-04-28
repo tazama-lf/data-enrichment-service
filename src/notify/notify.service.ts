@@ -118,7 +118,7 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
           this.logger.warn(`Cannot cache PUSH config: path is null for endpointId ${endpointId}`);
         } else {
           await this.redis.setJson(pushRecord.path, JSON.stringify(pushRecord), this.cacheTtl);
-          this.logger.log(`Updated cache for key: ${pushRecord.path}`);
+          this.logger.log(`Updated cache for key: ${pushRecord.path} with publishing_status : ${pushRecord.publishing_status}`);
         }
       } else {
         const data = record as Job;
