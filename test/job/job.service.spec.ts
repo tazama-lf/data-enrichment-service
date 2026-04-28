@@ -103,7 +103,7 @@ describe('JobService', () => {
         const result = await service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
 
         expect(mockRedisService.getJson).toHaveBeenCalledWith('tenant_456:/tcs/test-endpoint');
-        expect(mockLoggerService.log).toHaveBeenCalledWith('Using endpoint from cache: /tcs/test-endpoint');
+        expect(mockLoggerService.log).toHaveBeenCalledWith('Using endpoint from cache: /tcs/test-endpoint with publishing_status: active');
         expect(mockDatabaseService.updateTable).toHaveBeenCalledWith(
           'tenant_456_test_table',
           'endpoint-123',
