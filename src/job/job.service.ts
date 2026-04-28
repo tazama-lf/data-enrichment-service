@@ -43,7 +43,7 @@ export class JobService {
           throw new NotFoundException(`Endpoint ${path} does not exist with tenant_id ${tenantId}`);
         }
 
-        this.loggerService.log(`Using endpoint from cache: ${path}`);
+        this.loggerService.log(`Using endpoint from cache: ${path} with publishing_status: ${endpoint.publishing_status}`);
       } else {
         const result = await this.db.getPushJobByPath(path, tenantId);
 
