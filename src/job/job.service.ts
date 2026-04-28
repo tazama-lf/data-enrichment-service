@@ -32,7 +32,7 @@ export class JobService {
 
       const { path } = req;
 
-      const cacheKey = `${tenantId}:${path}`;
+      const cacheKey = path;
       const cachedEndpoint = await this.redis.getJson(cacheKey);
       let endpoint: PushJob;
 
