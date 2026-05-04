@@ -49,7 +49,7 @@ export class ExecutorService {
     if (job.iterations && newFailures >= job.iterations) {
       const cronJob = this.schedulerRegistry.getCronJobs().get(jobKey);
       if (cronJob) {
-        cronJob.stop();
+        await cronJob.stop();
         this.schedulerRegistry.deleteCronJob(jobKey);
       }
     }
@@ -222,14 +222,14 @@ export class ExecutorService {
   }
 
   @ApmSpan('cron-job-delete')
-  deleteCronJob(jobId: string, scheduleId: string): void {
+  async deleteCronJob(jobId: string, scheduleId: string): Promise<void> {
     this.loggerService.log('Executing Delete cron Job');
 
     const jobKey = getJobKey(jobId, scheduleId);
     const existingJob = this.schedulerRegistry.getCronJobs().get(jobKey);
     if (existingJob) {
       this.loggerService.warn(`Cron job ${jobKey} exists. Stopping.`);
-      existingJob.stop();
+      await existingJob.stop();
       this.schedulerRegistry.deleteCronJob(jobKey);
     }
   }
@@ -248,7 +248,7 @@ export class ExecutorService {
     const existingJob = this.schedulerRegistry.getCronJobs().get(jobKey);
     if (existingJob) {
       this.loggerService.warn(`Cron job ${jobKey} already exists. Stopping and replacing.`);
-      existingJob.stop();
+      await existingJob.stop();
       this.schedulerRegistry.deleteCronJob(jobKey);
     }
 
