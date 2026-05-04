@@ -687,7 +687,7 @@ describe('ExecutorService', () => {
       mockSftpClient.createReadStream.mockReturnValue(stream);
       const file = { path: '/data/test.json', file_type: FileType.JSON, delimiter: '' };
 
-      await expect(service.transformFileToJSON(mockSftpClient, file)).rejects.toThrow();
+      await expect(service.transformFileToJSON(mockSftpClient, file)).rejects.toThrow(/Unexpected token|is not valid JSON/);
     });
 
     it('should log and rethrow transformation errors', async () => {

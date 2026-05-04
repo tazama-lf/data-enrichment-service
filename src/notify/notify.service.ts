@@ -137,7 +137,7 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
             });
             return;
           }
-          await this.executorService.deleteCronJob(data.id, data.schedule_id);
+          this.executorService.deleteCronJob(data.id, data.schedule_id);
         }
       }
 
