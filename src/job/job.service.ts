@@ -32,7 +32,7 @@ export class JobService {
 
       const { path } = req;
 
-      const cacheKey = `${tenantId}:${path}`;
+      const cacheKey = path;
       const cachedEndpoint = await this.redis.getJson(cacheKey);
       let endpoint: PushJob;
 
@@ -43,7 +43,7 @@ export class JobService {
           throw new NotFoundException(`Endpoint ${path} does not exist with tenant_id ${tenantId}`);
         }
 
-        this.loggerService.log(`Using endpoint from cache: ${path}`);
+        this.loggerService.log(`Using endpoint from cache: ${path} with publishing_status: ${endpoint.publishing_status}`);
       } else {
         const result = await this.db.getPushJobByPath(path, tenantId);
 
@@ -57,8 +57,18 @@ export class JobService {
         this.loggerService.log(`Cached endpoint for path: ${path}`);
       }
 
-      if (endpoint.status !== JobStatus.DEPLOYED || endpoint.publishing_status !== ScheduleStatus.ACTIVE) {
-        throw new BadRequestException('Endpoint not deployed or not active.');
+      this.loggerService.log(`Endpoint status: "${endpoint.status}", publishing_status: "${endpoint.publishing_status}"`);
+
+      // JobStatus.DEPLOYED = "STATUS_08_DEPLOYED", JobStatus.APPROVED = "STATUS_04_APPROVED"
+      const allowedStatuses = [JobStatus.DEPLOYED, JobStatus.APPROVED];
+      const isValidStatus = allowedStatuses.includes(endpoint.status);
+      const isActivePublishing = endpoint.publishing_status === ScheduleStatus.ACTIVE; // "active"
+
+      if (!isValidStatus || !isActivePublishing) {
+        this.loggerService.error(
+          `Status validation failed. Status: "${endpoint.status}" (valid: ${isValidStatus}), Publishing Status: "${endpoint.publishing_status}" (valid: ${isActivePublishing}), Allowed Statuses: [${allowedStatuses.join(', ')}], Expected Publishing: "${ScheduleStatus.ACTIVE}"`,
+        );
+        throw new BadRequestException('Endpoint not deployed/approved or not active.');
       }
 
       const items = Array.isArray(body.data) ? body.data : [body.data];

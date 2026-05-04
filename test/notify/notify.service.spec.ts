@@ -1,3 +1,11 @@
+// Set required environment variables before imports
+process.env.STARTUP_TYPE = process.env.STARTUP_TYPE || 'nats';
+process.env.SERVER_URL = process.env.SERVER_URL || 'nats://localhost:4222';
+process.env.CONSUMER_STREAM = process.env.CONSUMER_STREAM || 'config.notification';
+process.env.PRODUCER_STREAM = process.env.PRODUCER_STREAM || 'config.notification.response';
+process.env.FUNCTION_NAME = process.env.FUNCTION_NAME || 'data-enrichment-service';
+process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '12345678901234567890123456789012';
+
 import { Test, type TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
@@ -74,7 +82,7 @@ describe('NotifyService', () => {
 
     mockDatabaseService = {
       getDefaultPushJob: jest.fn(),
-      getPushJobById: jest.fn(),
+      getJobById: jest.fn(),
       updateTable: jest.fn().mockResolvedValue(undefined),
       ensureTable: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<DatabaseService>;
@@ -213,14 +221,14 @@ describe('NotifyService', () => {
         }),
       };
 
-      mockDatabaseService.getPushJobById.mockResolvedValue(mockPushJob as unknown as Record<string, unknown>);
+      mockDatabaseService.getJobById.mockResolvedValue(mockPushJob as unknown as Record<string, unknown>);
 
       await service.handleNatsMessage(reqObj, handleResponse);
 
       expect(mockLoggerService.log).toHaveBeenCalledWith(expect.stringContaining('RECEIVING MESSAGE'));
-      expect(mockDatabaseService.getPushJobById).toHaveBeenCalledWith(ConfigType.PUSH, 'push-123');
+      expect(mockDatabaseService.getJobById).toHaveBeenCalledWith(ConfigType.PUSH, 'push-123');
       expect(mockRedisService.setJson).toHaveBeenCalledWith('/api/push-endpoint', JSON.stringify(mockPushJob), 86400);
-      expect(mockLoggerService.log).toHaveBeenCalledWith('Updated cache for key: /api/push-endpoint');
+      expect(mockLoggerService.log).toHaveBeenCalledWith('Updated cache for key: /api/push-endpoint with publishing_status : active');
       expect(handleResponse).toHaveBeenCalledWith({
         endpointId: 'push-123',
         status: 'ACK',
@@ -239,7 +247,7 @@ describe('NotifyService', () => {
       };
 
       const pushJobWithNullPath = { ...mockPushJob, path: null };
-      mockDatabaseService.getPushJobById.mockResolvedValue(pushJobWithNullPath as unknown as Record<string, unknown>);
+      mockDatabaseService.getJobById.mockResolvedValue(pushJobWithNullPath as unknown as Record<string, unknown>);
 
       await service.handleNatsMessage(reqObj, handleResponse);
 
@@ -263,11 +271,11 @@ describe('NotifyService', () => {
         }),
       };
 
-      mockDatabaseService.getPushJobById.mockResolvedValue(mockPullJob as unknown as Record<string, unknown>);
+      mockDatabaseService.getJobById.mockResolvedValue(mockPullJob as unknown as Record<string, unknown>);
 
       await service.handleNatsMessage(reqObj, handleResponse);
 
-      expect(mockDatabaseService.getPushJobById).toHaveBeenCalledWith(ConfigType.PULL, 'pull-123');
+      expect(mockDatabaseService.getJobById).toHaveBeenCalledWith(ConfigType.PULL, 'pull-123');
       expect(mockExecutorService.addCronJob).toHaveBeenCalledWith(mockPullJob);
       expect(mockExecutorService.deleteCronJob).not.toHaveBeenCalled();
       expect(handleResponse).toHaveBeenCalledWith({
@@ -291,11 +299,11 @@ describe('NotifyService', () => {
         publishing_status: ScheduleStatus.INACTIVE,
       };
 
-      mockDatabaseService.getPushJobById.mockResolvedValue(inactivePullJob as unknown as Record<string, unknown>);
+      mockDatabaseService.getJobById.mockResolvedValue(inactivePullJob as unknown as Record<string, unknown>);
 
       await service.handleNatsMessage(reqObj, handleResponse);
 
-      expect(mockDatabaseService.getPushJobById).toHaveBeenCalledWith(ConfigType.PULL, 'pull-123');
+      expect(mockDatabaseService.getJobById).toHaveBeenCalledWith(ConfigType.PULL, 'pull-123');
       expect(mockExecutorService.deleteCronJob).toHaveBeenCalledWith('pull-123', 'schedule-789');
       expect(mockExecutorService.addCronJob).not.toHaveBeenCalled();
       expect(handleResponse).toHaveBeenCalledWith({
@@ -320,7 +328,7 @@ describe('NotifyService', () => {
         publishing_status: ScheduleStatus.INACTIVE,
       };
 
-      mockDatabaseService.getPushJobById.mockResolvedValue(pullJobNoSchedule as unknown as Record<string, unknown>);
+      mockDatabaseService.getJobById.mockResolvedValue(pullJobNoSchedule as unknown as Record<string, unknown>);
 
       await service.handleNatsMessage(reqObj, handleResponse);
 
@@ -339,7 +347,7 @@ describe('NotifyService', () => {
         }),
       };
 
-      mockDatabaseService.getPushJobById.mockResolvedValue(undefined);
+      mockDatabaseService.getJobById.mockResolvedValue(undefined);
 
       await service.handleNatsMessage(reqObj, handleResponse);
 
@@ -362,7 +370,7 @@ describe('NotifyService', () => {
       };
 
       const error = new Error('Database connection failed');
-      mockDatabaseService.getPushJobById.mockRejectedValue(error);
+      mockDatabaseService.getJobById.mockRejectedValue(error);
 
       await service.handleNatsMessage(reqObj, handleResponse);
 
@@ -384,7 +392,7 @@ describe('NotifyService', () => {
         }),
       };
 
-      mockDatabaseService.getPushJobById.mockRejectedValue('String error');
+      mockDatabaseService.getJobById.mockRejectedValue('String error');
 
       await service.handleNatsMessage(reqObj, handleResponse);
 
@@ -423,7 +431,7 @@ describe('NotifyService', () => {
         }),
       };
 
-      mockDatabaseService.getPushJobById.mockResolvedValue(mockPushJob as unknown as Record<string, unknown>);
+      mockDatabaseService.getJobById.mockResolvedValue(mockPushJob as unknown as Record<string, unknown>);
 
       const error = new Error('Redis connection failed');
       mockRedisService.setJson.mockRejectedValue(error);
@@ -448,7 +456,7 @@ describe('NotifyService', () => {
         }),
       };
 
-      mockDatabaseService.getPushJobById.mockResolvedValue(mockPullJob as unknown as Record<string, unknown>);
+      mockDatabaseService.getJobById.mockResolvedValue(mockPullJob as unknown as Record<string, unknown>);
 
       const error = new Error('Failed to add cron job');
       mockExecutorService.addCronJob.mockRejectedValue(error);
@@ -474,7 +482,7 @@ describe('NotifyService', () => {
 
       await service.handleNatsMessage(reqObj, handleResponse);
 
-      expect(mockDatabaseService.getPushJobById).not.toHaveBeenCalled();
+      expect(mockDatabaseService.getJobById).not.toHaveBeenCalled();
       expect(handleResponse).toHaveBeenCalledWith(
         expect.objectContaining({
           status: 'NACK',
@@ -493,7 +501,7 @@ describe('NotifyService', () => {
 
       await service.handleNatsMessage(reqObj, handleResponse);
 
-      expect(mockDatabaseService.getPushJobById).not.toHaveBeenCalled();
+      expect(mockDatabaseService.getJobById).not.toHaveBeenCalled();
       expect(handleResponse).toHaveBeenCalledWith(
         expect.objectContaining({
           status: 'NACK',
@@ -519,7 +527,7 @@ describe('NotifyService', () => {
         }),
       };
 
-      mockDatabaseService.getPushJobById
+      mockDatabaseService.getJobById
         .mockResolvedValueOnce(mockPushJob as unknown as Record<string, unknown>)
         .mockResolvedValueOnce(mockPullJob as unknown as Record<string, unknown>);
 
@@ -539,7 +547,7 @@ describe('NotifyService', () => {
         }),
       };
 
-      mockDatabaseService.getPushJobById.mockResolvedValue(mockPushJob as unknown as Record<string, unknown>);
+      mockDatabaseService.getJobById.mockResolvedValue(mockPushJob as unknown as Record<string, unknown>);
 
       service.onModuleDestroy();
       await service.handleNatsMessage(reqObj, handleResponse);

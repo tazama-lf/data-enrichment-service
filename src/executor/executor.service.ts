@@ -14,13 +14,15 @@ import {
   SourceType,
 } from '@tazama-lf/tcs-lib';
 import { CronJob } from 'cron';
-import { parse } from 'csv-parse/sync';
+import { parse } from 'csv-parse';
 import * as iconv from 'iconv-lite';
 import { firstValueFrom } from 'rxjs';
 import SFTPClient from 'ssh2-sftp-client';
 import { ApmSpan } from '../apm/apm.decorators';
 import { DatabaseService } from '../database/database.service';
 import { decrypt, getJobKey, isValidText } from '../utils/helpers';
+import { pipeline } from 'node:stream/promises';
+
 @Injectable()
 export class ExecutorService {
   private readonly cacheTtl: number;
@@ -153,28 +155,40 @@ export class ExecutorService {
 
   @ApmSpan('transform-file-json')
   async transformFileToJSON(sftp: SFTPClient, file: FileSettings): Promise<Array<Record<string, unknown>>> {
+    const records: Array<Record<string, unknown>> = [];
+
     try {
-      const fileData = await sftp.get(file.path);
-
-      if (!(Buffer.isBuffer(fileData) || fileData instanceof Uint8Array)) {
-        throw new Error('SFTP returned non-buffer data (stream or string)');
-      }
-
-      const decoded = iconv.decode(fileData, 'utf8');
-
-      if (!isValidText(decoded)) {
-        throw new Error('Invalid text after decoding');
-      }
+      const readStream = sftp.createReadStream(file.path, {
+        autoClose: true,
+      });
 
       if (file.file_type === FileType.JSON) {
+        const chunks: Buffer[] = [];
+
+        await pipeline(readStream, async function (source) {
+          for await (const chunk of source) {
+            chunks.push(chunk as Buffer);
+          }
+        });
+
+        const buffer = Buffer.concat(chunks);
+        const decoded = iconv.decode(buffer, 'utf8');
+
+        if (!isValidText(decoded)) {
+          throw new Error('Invalid text after decoding');
+        }
+
         const raw: unknown = JSON.parse(decoded);
         if (Array.isArray(raw)) return raw as Array<Record<string, unknown>>;
-        if (typeof raw === 'object' && raw !== null) return [raw as Record<string, unknown>];
+        if (typeof raw === 'object' && raw !== null) {
+          return [raw as Record<string, unknown>];
+        }
         return [];
       }
 
       const delimiter = file.file_type === FileType.CSV ? (file.delimiter ?? ',') : '\t';
-      const records = parse(decoded, {
+
+      const parser = parse({
         delimiter,
         columns: (headers: string[]) =>
           headers.map((h) =>
@@ -192,7 +206,14 @@ export class ExecutorService {
         escape: '"',
         record_delimiter: ['\r\n', '\n', '\r'],
       });
-      return records as Array<Record<string, unknown>>;
+
+      await pipeline(readStream, iconv.decodeStream('utf8'), parser, async function (source) {
+        for await (const record of source) {
+          records.push(record as Record<string, unknown>);
+        }
+      });
+
+      return records;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       this.loggerService.error(`Error transforming file: ${message}`);
@@ -223,6 +244,13 @@ export class ExecutorService {
 
     const { timeZone } = Intl.DateTimeFormat().resolvedOptions();
     const jobKey = getJobKey(job.id, job.schedule_id);
+
+    const existingJob = this.schedulerRegistry.getCronJobs().get(jobKey);
+    if (existingJob) {
+      this.loggerService.warn(`Cron job ${jobKey} already exists. Stopping and replacing.`);
+      await existingJob.stop();
+      this.schedulerRegistry.deleteCronJob(jobKey);
+    }
 
     await this.redis.set(jobKey, 0, this.cacheTtl);
 

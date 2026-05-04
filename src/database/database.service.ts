@@ -175,17 +175,17 @@ export class DatabaseService implements OnModuleInit {
     }
   }
 
-  async getPushJobById(type: ConfigType, id: string): Promise<Record<string, unknown> | undefined> {
+  async getJobById(type: ConfigType, id: string): Promise<Record<string, unknown> | undefined> {
     try {
       if (!this.DbManager) {
         throw new InternalServerErrorException('Database manager not initialized - database operation cannot proceed');
       }
 
-      this.loggerService.log(`Getting Push job for id: ${id}`, this.log_context);
+      this.loggerService.log(`Getting ${type} job for id: ${id}`, this.log_context);
       return await this.DbManager.getIdPushJob(type, id);
     } catch (error) {
       this.handleDatabaseError(error, 'push job', {
-        details: `push job for tenant ${id}`,
+        details: `${type} job for tenant ${id}`,
       });
     }
   }

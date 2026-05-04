@@ -182,7 +182,7 @@ describe('DatabaseService', () => {
       const mockJob = { id: 'job-123' };
       mockDbManager.getIdPushJob.mockResolvedValue(mockJob);
 
-      const result = await service.getPushJobById(ConfigType.PULL, 'job-123');
+      const result = await service.getJobById(ConfigType.PULL, 'job-123');
 
       expect(result).toEqual(mockJob);
       expect(mockDbManager.getIdPushJob).toHaveBeenCalledWith(ConfigType.PULL, 'job-123');
@@ -192,7 +192,7 @@ describe('DatabaseService', () => {
     it('should throw InternalServerErrorException when database query fails', async () => {
       mockDbManager.getIdPushJob.mockRejectedValue(new Error('Database error'));
 
-      await expect(service.getPushJobById(ConfigType.PULL, 'job-123')).rejects.toThrow(InternalServerErrorException);
+      await expect(service.getJobById(ConfigType.PULL, 'job-123')).rejects.toThrow(InternalServerErrorException);
     });
 
     it('should throw InternalServerErrorException when database manager is not initialized', async () => {
@@ -206,7 +206,7 @@ describe('DatabaseService', () => {
 
       const testService = module.get<DatabaseService>(DatabaseService);
 
-      await expect(testService.getPushJobById(ConfigType.PULL, 'job-123')).rejects.toThrow(InternalServerErrorException);
+      await expect(testService.getJobById(ConfigType.PULL, 'job-123')).rejects.toThrow(InternalServerErrorException);
     });
   });
 

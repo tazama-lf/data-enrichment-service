@@ -99,7 +99,7 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
 
     const { endpointId, configType } = payload;
     try {
-      const record = (await this.db.getPushJobById(configType, endpointId)) as PushJob | Job | undefined;
+      const record = (await this.db.getJobById(configType, endpointId)) as PushJob | Job | undefined;
 
       if (!record) {
         this.logger.warn(`No record found for endpointId: ${endpointId}`);
@@ -118,7 +118,7 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
           this.logger.warn(`Cannot cache PUSH config: path is null for endpointId ${endpointId}`);
         } else {
           await this.redis.setJson(pushRecord.path, JSON.stringify(pushRecord), this.cacheTtl);
-          this.logger.log(`Updated cache for key: ${pushRecord.path}`);
+          this.logger.log(`Updated cache for key: ${pushRecord.path} with publishing_status : ${pushRecord.publishing_status}`);
         }
       } else {
         const data = record as Job;
