@@ -79,7 +79,7 @@ export class JobService {
       }));
 
       await this.db.updateTable(
-        `${endpoint.tenant_id}_${endpoint.table_name}`,
+        `${endpoint.tenant_id}_${endpoint.table_name}`.toLowerCase(),
         endpoint.id,
         endpoint.mode,
         payload,
