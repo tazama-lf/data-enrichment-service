@@ -309,12 +309,15 @@ export class DatabaseService implements OnModuleInit {
       if (arr.length === 0) {
         throw new Error('No valid data provided for table update.');
       }
-      const rows = arr.map((item) => ({
-        id: v4(),
-        data: JSON.stringify(item),
-        checksum: createHash('sha256').update(JSON.stringify(item)).digest('hex'),
-        job_id: jobId,
-      }));
+      const rows = arr.map((item: unknown) => {
+        const rowData: unknown = type === ConfigType.PUSH ? (item as { data: unknown }).data : item;
+        return {
+          id: v4(),
+          data: JSON.stringify(rowData),
+          checksum: createHash('sha256').update(JSON.stringify(rowData)).digest('hex'),
+          job_id: jobId,
+        };
+      });
 
       if (mode === IngestMode.APPEND) {
         await this.insertRows(tableName, rows, jobId, tenantId, type);
