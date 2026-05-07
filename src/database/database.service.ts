@@ -310,7 +310,16 @@ export class DatabaseService implements OnModuleInit {
         throw new Error('No valid data provided for table update.');
       }
       const rows = arr.map((item: unknown) => {
-        const rowData: unknown = type === ConfigType.PUSH ? (item as { data: unknown }).data : item;
+        const rowData: unknown =
+          type === ConfigType.PUSH &&
+          typeof item === 'object' &&
+          item !== null &&
+          'data' in item &&
+          (item as Record<string, unknown>).data !== undefined
+            ? (item as Record<string, unknown>).data
+            : type === ConfigType.PUSH
+              ? null
+              : item;
         return {
           id: v4(),
           data: JSON.stringify(rowData),
