@@ -450,6 +450,38 @@ describe('ExecutorService', () => {
       await expect(service.createSftpConnection(sftpConnection)).rejects.toThrow('SFTP connection failed: Connection timeout');
       expect(mockLoggerService.error).toHaveBeenCalledWith('Connection timeout');
     });
+
+    it('should throw when password is missing for USERNAME_PASSWORD auth', async () => {
+      const sftpConnection = {
+        host: 'sftp.example.com',
+        port: 22,
+        auth_type: AuthType.USERNAME_PASSWORD,
+        user_name: 'testuser',
+        password: '',
+        private_key: '',
+      };
+
+      await expect(service.createSftpConnection(sftpConnection)).rejects.toThrow(
+        'SFTP connection failed: Password required for USERNAME_PASSWORD auth type',
+      );
+      expect(mockLoggerService.error).toHaveBeenCalledWith('Password required for USERNAME_PASSWORD auth type');
+    });
+
+    it('should throw when private_key is missing for PRIVATE_KEY auth', async () => {
+      const sftpConnection = {
+        host: 'sftp.example.com',
+        port: 22,
+        auth_type: AuthType.PRIVATE_KEY,
+        user_name: 'testuser',
+        password: '',
+        private_key: '',
+      };
+
+      await expect(service.createSftpConnection(sftpConnection)).rejects.toThrow(
+        'SFTP connection failed: Private key required for PRIVATE_KEY auth type',
+      );
+      expect(mockLoggerService.error).toHaveBeenCalledWith('Private key required for PRIVATE_KEY auth type');
+    });
   });
 
   describe('handleSftpJob', () => {
@@ -592,6 +624,55 @@ describe('ExecutorService', () => {
 
       expect(mockRedisService.set).toHaveBeenCalledWith('job-key', 0, 86400);
     });
+
+    it('should handle non-Error exceptions in SFTP job', async () => {
+      const sftpJob: Job = {
+        ...mockJob,
+        source_type: SourceType.SFTP,
+        connection: {
+          host: 'sftp.example.com',
+          port: 22,
+          auth_type: AuthType.USERNAME_PASSWORD,
+          user_name: 'testuser',
+          password: 'encrypted:password',
+          private_key: '',
+        },
+        file: {
+          path: '/data/test.json',
+          file_type: FileType.JSON,
+        },
+      };
+      mockSftpClient.exists.mockRejectedValue('non-error string');
+
+      await service.handleSftpJob(sftpJob, 'job-key');
+
+      expect(mockLoggerService.error).toHaveBeenCalledWith('SFTP error: non-error string');
+    });
+
+    it('should log a warning when SFTP cleanup (end) fails', async () => {
+      mockSftpClient.createReadStream.mockReturnValue(createMockReadStream(Buffer.from('{"key":"value"}')));
+      mockSftpClient.end.mockRejectedValue(new Error('Cleanup failed'));
+      const sftpJob: Job = {
+        ...mockJob,
+        source_type: SourceType.SFTP,
+        connection: {
+          host: 'sftp.example.com',
+          port: 22,
+          auth_type: AuthType.USERNAME_PASSWORD,
+          user_name: 'testuser',
+          password: 'encrypted:password',
+          private_key: '',
+        },
+        file: {
+          path: '/data/test.json',
+          file_type: FileType.JSON,
+        },
+      };
+
+      await service.handleSftpJob(sftpJob, 'job-key');
+
+      expect(mockLoggerService.warn).toHaveBeenCalledWith('SFTP cleanup error (non-critical): Cleanup failed');
+    });
   });
 
   describe('transformFileToJSON', () => {
@@ -697,6 +778,36 @@ describe('ExecutorService', () => {
       await expect(service.transformFileToJSON(mockSftpClient, file)).rejects.toThrow();
 
       expect(mockLoggerService.error).toHaveBeenCalledWith(expect.stringContaining('Error transforming file'));
+    });
+
+    it('should throw when isValidText returns false for JSON content', async () => {
+      const helpersMock = jest.requireMock<{ isValidText: jest.Mock }>('../../src/utils/helpers');
+      helpersMock.isValidText.mockReturnValueOnce(false);
+      mockSftpClient.createReadStream.mockReturnValue(createMockReadStream(Buffer.from('{"key":"value"}')));
+      const file = { path: '/data/test.json', file_type: FileType.JSON, delimiter: '' };
+
+      await expect(service.transformFileToJSON(mockSftpClient, file)).rejects.toThrow('Invalid text after decoding');
+      expect(mockLoggerService.error).toHaveBeenCalledWith(expect.stringContaining('Error transforming file'));
+    });
+
+    it('should use default comma delimiter when CSV file has no delimiter set', async () => {
+      const csvContent = 'Name,Age\nJohn,30';
+      mockSftpClient.createReadStream.mockReturnValue(createMockReadStream(Buffer.from(csvContent)));
+      const file = { path: '/data/test.csv', file_type: FileType.CSV, delimiter: undefined };
+
+      const result = await service.transformFileToJSON(mockSftpClient, file as never);
+
+      expect(result).toEqual([{ name: 'John', age: '30' }]);
+    });
+
+    it('should handle non-Error thrown during file transformation', async () => {
+      mockSftpClient.createReadStream.mockImplementation(() => {
+        throw 'string transform error';
+      });
+      const file = { path: '/data/test.json', file_type: FileType.JSON, delimiter: '' };
+
+      await expect(service.transformFileToJSON(mockSftpClient, file)).rejects.toEqual('string transform error');
+      expect(mockLoggerService.error).toHaveBeenCalledWith('Error transforming file: string transform error');
     });
   });
 

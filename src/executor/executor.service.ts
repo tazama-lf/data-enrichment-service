@@ -86,7 +86,14 @@ export class ExecutorService {
 
     if (isSuccessfulResponse) {
       if (data !== null && data !== undefined && typeof data === 'object') {
-        await this.db.updateTable(`${job.tenant_id}_${job.table_name}`, job.id, job.mode, data, job.tenant_id, ConfigType.PULL);
+        await this.db.updateTable(
+          `${job.tenant_id}_${job.table_name}`.toLowerCase(),
+          job.id,
+          job.mode,
+          data,
+          job.tenant_id,
+          ConfigType.PULL,
+        );
       }
       await this.redis.set(jobKey, 0, this.cacheTtl);
     } else {
@@ -136,7 +143,14 @@ export class ExecutorService {
       if (!fileExists) throw new Error(`File ${file.path} not found on SFTP server`);
 
       const records = await this.transformFileToJSON(sftp, file);
-      await this.db.updateTable(`${job.tenant_id}_${job.table_name}`, job.id, job.mode, records, job.tenant_id, ConfigType.PULL);
+      await this.db.updateTable(
+        `${job.tenant_id}_${job.table_name}`.toLowerCase(),
+        job.id,
+        job.mode,
+        records,
+        job.tenant_id,
+        ConfigType.PULL,
+      );
 
       await this.redis.set(jobKey, 0, this.cacheTtl);
     } catch (error: unknown) {
