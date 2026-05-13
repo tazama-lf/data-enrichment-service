@@ -5,6 +5,8 @@ import * as jwt from 'jsonwebtoken';
 import { CLAIMS_KEY } from './auth.decorator';
 import { AuthenticatedUser, RequestWithUser } from './auth.types';
 
+const BEARER_TOKEN_PARTS_COUNT = 2;
+
 @Injectable()
 export class TazamaAuthGuard implements CanActivate {
   private readonly logger = new Logger(TazamaAuthGuard.name);
@@ -32,7 +34,7 @@ export class TazamaAuthGuard implements CanActivate {
 
     try {
       const tokenParts = authHeader.split(' ');
-      if (tokenParts.length !== 2) {
+      if (tokenParts.length !== BEARER_TOKEN_PARTS_COUNT) {
         this.logger.warn('Malformed authorization header', this.LOG_CONTEXT);
         throw new UnauthorizedException('Malformed authorization header');
       }

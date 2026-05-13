@@ -50,7 +50,6 @@ export default defineConfig([
       complexity: ['warn', { max: 15 }],
       'no-console': 'error',
       'no-unneeded-ternary': 'off',
-      /* eslint-comments are bundled with eslint-config-love but they are using the unmaintained plugin. Replaced with @eslint-community/eslint-plugin-eslint-comments */
       'eslint-comments/require-description': 'off',
       'eslint-comments/disable-enable-pair': 'off',
       'eslint-comments/no-aggregating-enable': 'off',

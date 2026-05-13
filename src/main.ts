@@ -8,6 +8,8 @@ import { ConfigService } from '@nestjs/config';
 import { json } from 'express';
 dotenv.config({ path: '.env' });
 
+const DEFAULT_PORT = 3001;
+
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
@@ -21,7 +23,7 @@ async function bootstrap(): Promise<void> {
     origin: configService.get<string>('CORS_ORIGINS', 'localhost').split(','),
     credentials: true,
   });
-  const port = configService.get<number>('PORT', 3001);
+  const port = configService.get<number>('PORT', DEFAULT_PORT);
 
   await app.listen(port);
 }

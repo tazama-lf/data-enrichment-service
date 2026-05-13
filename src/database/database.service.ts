@@ -13,6 +13,8 @@ import { createHash } from 'node:crypto';
 import { v4 } from 'uuid';
 import { ErrorPattern } from '../utils/common';
 
+const DEFAULT_BATCH_SIZE = 1000;
+
 @Injectable()
 export class DatabaseService implements OnModuleInit {
   private DbManager: (DatabaseManagerInstance<ManagerConfig> & ConfigurationDB & EnrichmentDB) | null = null;
@@ -22,7 +24,7 @@ export class DatabaseService implements OnModuleInit {
     private readonly loggerService: LoggerService,
     private readonly configService: ConfigService,
   ) {
-    this.batchSize = this.configService.get<number>('BATCH_SIZE') ?? 1000;
+    this.batchSize = this.configService.get<number>('BATCH_SIZE') ?? DEFAULT_BATCH_SIZE;
   }
 
   async onModuleInit(): Promise<void> {

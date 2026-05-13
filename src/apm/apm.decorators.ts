@@ -29,16 +29,13 @@ import type { Span } from 'elastic-apm-node';
  */
 export function ApmSpan(spanName: string): MethodDecorator {
   return function (target: unknown, propertyKey: string | symbol, descriptor: PropertyDescriptor): PropertyDescriptor {
-    const originalMethod = descriptor.value as unknown;
+    const { value: originalMethod } = descriptor as { value: unknown };
 
     descriptor.value = async function (this: unknown, ...args: unknown[]): Promise<unknown> {
-      // Note: This decorator converts the method to async.
-      // Try to get ApmService from the current instance
       let apmService: ApmService | undefined;
 
-      // Check if the class has apmService as a property
       if (this !== null && typeof this === 'object' && 'apmService' in this) {
-        apmService = (this as { apmService?: ApmService }).apmService;
+        ({ apmService } = this as { apmService?: ApmService });
       }
 
       if (!apmService) {
@@ -69,38 +66,15 @@ export function ApmSpan(spanName: string): MethodDecorator {
   };
 }
 
-/**
- * Decorator for synchronous method instrumentation with APM spans
- *
- * Use this decorator for synchronous methods that don't return Promises.
- * For async methods, use @ApmSpan decorator instead.
- *
- * Usage: @ApmSpanSync('operation-name')
- *
- * @param spanName - Name of the APM span
- * @returns Method decorator
- *
- * @example
- * ```typescript
- * class MyService {
- *   @ApmSpanSync('calculate-sum')
- *   calculateSum(a: number, b: number): number {
- *     return a + b;
- *   }
- * }
- * ```
- */
 export function ApmSpanSync(spanName: string): MethodDecorator {
   return (target: unknown, propertyKey: string | symbol, descriptor: PropertyDescriptor): PropertyDescriptor => {
-    const originalMethod = descriptor.value as unknown;
+    const { value: originalMethod } = descriptor as { value: unknown };
 
     descriptor.value = function (this: unknown, ...args: unknown[]): unknown {
-      // Try to get ApmService from the current instance
       let apmService: ApmService | undefined;
 
-      // Check if the class has apmService as a property
       if (this !== null && typeof this === 'object' && 'apmService' in this) {
-        apmService = (this as { apmService?: ApmService }).apmService;
+        ({ apmService } = this as { apmService?: ApmService });
       }
 
       if (!apmService) {
@@ -130,37 +104,10 @@ export function ApmSpanSync(spanName: string): MethodDecorator {
     return descriptor;
   };
 }
-
-/**
- * Injectable mixin that provides APM instrumentation methods
- * Extend your services from this class to get APM capabilities
- *
- * @example
- * ```typescript
- * @Injectable()
- * class MyService extends ApmInstrumented {
- *   constructor(apmService: ApmService) {
- *     super(apmService);
- *   }
- *
- *   async someMethod() {
- *     return this.withSpan('some-operation', async () => {
- *       // Your code here
- *     });
- *   }
- * }
- * ```
- */
 @Injectable()
 export abstract class ApmInstrumented {
   constructor(protected readonly apmService: ApmService) {}
 
-  /**
-   * Execute a function within an APM span
-   * @param spanName - Name of the span
-   * @param fn - Function to execute
-   * @returns Promise with function result
-   */
   protected async withSpan<T>(spanName: string, fn: () => Promise<T>): Promise<T> {
     const span = this.apmService.startSpan(spanName);
 
@@ -182,12 +129,6 @@ export abstract class ApmInstrumented {
     }
   }
 
-  /**
-   * Execute a synchronous function within an APM span
-   * @param spanName - Name of the span
-   * @param fn - Function to execute
-   * @returns Function result
-   */
   protected withSpanSync<T>(spanName: string, fn: () => T): T {
     const span = this.apmService.startSpan(spanName);
 
