@@ -8,6 +8,8 @@ import { ApmSpan } from '../apm/apm.decorators';
 import { DatabaseService } from '../database/database.service';
 import { CreateEnrichDataDto } from './dto/create-enrich-data.dto';
 
+const DEFAULT_CACHE_TTL_SECONDS = 86400;
+
 @Injectable()
 export class JobService {
   private readonly cacheTtl: number;
@@ -18,7 +20,7 @@ export class JobService {
     private readonly configService: ConfigService,
     private readonly redis: RedisService,
   ) {
-    this.cacheTtl = this.configService.get<number>('CACHE_TTL', 86400);
+    this.cacheTtl = this.configService.get<number>('CACHE_TTL', DEFAULT_CACHE_TTL_SECONDS);
   }
 
   @ApmSpan('data-enrichment-push')
@@ -79,7 +81,7 @@ export class JobService {
       }));
 
       await this.db.updateTable(
-        `${endpoint.tenant_id}_${endpoint.table_name}`,
+        `${endpoint.tenant_id}_${endpoint.table_name}`.toLowerCase(),
         endpoint.id,
         endpoint.mode,
         payload,

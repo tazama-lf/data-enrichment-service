@@ -23,6 +23,11 @@ import { DatabaseService } from '../database/database.service';
 import { decrypt, getJobKey, isValidText } from '../utils/helpers';
 import { pipeline } from 'node:stream/promises';
 
+const DEFAULT_CACHE_TTL_SECONDS = 86400;
+const DEFAULT_HTTP_TIMEOUT_MS = 30000;
+const HTTP_SUCCESS_STATUS_MIN = 200;
+const HTTP_SUCCESS_STATUS_MAX = 300;
+
 @Injectable()
 export class ExecutorService {
   private readonly cacheTtl: number;
@@ -35,7 +40,7 @@ export class ExecutorService {
     private readonly configService: ConfigService,
     private readonly httpService: HttpService,
   ) {
-    this.cacheTtl = this.configService.get<number>('CACHE_TTL', 86400);
+    this.cacheTtl = this.configService.get<number>('CACHE_TTL', DEFAULT_CACHE_TTL_SECONDS);
   }
 
   @ApmSpan('data-pull-failure')
@@ -73,7 +78,7 @@ export class ExecutorService {
   @ApmSpan('data-pull-http')
   async handleHttpJob(job: Job, jobKey: string): Promise<void> {
     const httpCon = job.connection as HTTPConnection;
-    const httpTimeout = this.configService.get<number>('HTTP_TIMEOUT', 30000);
+    const httpTimeout = this.configService.get<number>('HTTP_TIMEOUT', DEFAULT_HTTP_TIMEOUT_MS);
 
     const { data, status } = await firstValueFrom(
       this.httpService.get<unknown>(httpCon.url, {
@@ -82,11 +87,18 @@ export class ExecutorService {
       }),
     );
 
-    const isSuccessfulResponse = status >= 200 && status < 300;
+    const isSuccessfulResponse = status >= HTTP_SUCCESS_STATUS_MIN && status < HTTP_SUCCESS_STATUS_MAX;
 
     if (isSuccessfulResponse) {
       if (data !== null && data !== undefined && typeof data === 'object') {
-        await this.db.updateTable(`${job.tenant_id}_${job.table_name}`, job.id, job.mode, data, job.tenant_id, ConfigType.PULL);
+        await this.db.updateTable(
+          `${job.tenant_id}_${job.table_name}`.toLowerCase(),
+          job.id,
+          job.mode,
+          data,
+          job.tenant_id,
+          ConfigType.PULL,
+        );
       }
       await this.redis.set(jobKey, 0, this.cacheTtl);
     } else {
@@ -136,7 +148,14 @@ export class ExecutorService {
       if (!fileExists) throw new Error(`File ${file.path} not found on SFTP server`);
 
       const records = await this.transformFileToJSON(sftp, file);
-      await this.db.updateTable(`${job.tenant_id}_${job.table_name}`, job.id, job.mode, records, job.tenant_id, ConfigType.PULL);
+      await this.db.updateTable(
+        `${job.tenant_id}_${job.table_name}`.toLowerCase(),
+        job.id,
+        job.mode,
+        records,
+        job.tenant_id,
+        ConfigType.PULL,
+      );
 
       await this.redis.set(jobKey, 0, this.cacheTtl);
     } catch (error: unknown) {

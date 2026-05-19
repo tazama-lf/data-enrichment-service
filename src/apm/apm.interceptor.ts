@@ -7,6 +7,8 @@ import { ApmService } from './apm.service';
 import apm, { type Transaction } from 'elastic-apm-node';
 import type { Request, Response } from 'express';
 
+const HTTP_INTERNAL_SERVER_ERROR = 500;
+
 @Injectable()
 export class ApmInterceptor implements NestInterceptor {
   constructor(private readonly apmService: ApmService) {}
@@ -50,7 +52,7 @@ export class ApmInterceptor implements NestInterceptor {
           transaction.addLabels({
             'error.type': error.constructor.name,
             'error.message': error.message,
-            'http.status_code': response.statusCode || 500,
+            'http.status_code': response.statusCode || HTTP_INTERNAL_SERVER_ERROR,
           });
           transaction.end();
         }

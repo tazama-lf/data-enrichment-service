@@ -6,6 +6,8 @@ import { ConfigType, Job, PushJob, ScheduleStatus } from '@tazama-lf/tcs-lib';
 import { DatabaseService } from '../database/database.service';
 import { ExecutorService } from '../executor/executor.service';
 
+const DEFAULT_CACHE_TTL_SECONDS = 86400;
+
 enum Status {
   ACK = 'ACK',
   NACK = 'NACK',
@@ -26,7 +28,7 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
     private readonly executorService: ExecutorService,
     private readonly configService: ConfigService,
   ) {
-    this.cacheTtl = this.configService.get<number>('CACHE_TTL', 86400);
+    this.cacheTtl = this.configService.get<number>('CACHE_TTL', DEFAULT_CACHE_TTL_SECONDS);
     this.consumerStream = this.configService.get<string>('CONSUMER_STREAM', 'config.notification');
     this.producerStream = this.configService.get<string>('PRODUCER_STREAM', 'config.notification.response');
   }

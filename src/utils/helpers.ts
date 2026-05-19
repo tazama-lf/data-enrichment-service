@@ -1,5 +1,9 @@
 import * as crypto from 'node:crypto';
 
+const AES_KEY_BYTE_LENGTH = 32;
+const ENCRYPTED_PARTS_COUNT = 2;
+const AES_IV_BYTE_LENGTH = 16;
+
 const { ENCRYPTION_KEY } = process.env;
 
 if (!ENCRYPTION_KEY) {
@@ -8,13 +12,13 @@ if (!ENCRYPTION_KEY) {
 
 const buffer = Buffer.from(ENCRYPTION_KEY, 'utf8');
 
-if (buffer.length !== 32) {
+if (buffer.length !== AES_KEY_BYTE_LENGTH) {
   throw new Error('ENCRYPTION_KEY must be 32 bytes for aes-256-cbc');
 }
 
 export function decrypt(text: string): string {
   const parts = text.split(':');
-  if (parts.length !== 2) {
+  if (parts.length !== ENCRYPTED_PARTS_COUNT) {
     throw new Error('Invalid encrypted payload format');
   }
 
@@ -23,7 +27,7 @@ export function decrypt(text: string): string {
   try {
     const iv = Buffer.from(ivHex, 'hex');
 
-    if (iv.length !== 16) {
+    if (iv.length !== AES_IV_BYTE_LENGTH) {
       throw new Error('Invalid IV length');
     }
 

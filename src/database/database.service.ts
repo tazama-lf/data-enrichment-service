@@ -13,6 +13,8 @@ import { createHash } from 'node:crypto';
 import { v4 } from 'uuid';
 import { ErrorPattern } from '../utils/common';
 
+const DEFAULT_BATCH_SIZE = 1000;
+
 @Injectable()
 export class DatabaseService implements OnModuleInit {
   private DbManager: (DatabaseManagerInstance<ManagerConfig> & ConfigurationDB & EnrichmentDB) | null = null;
@@ -22,7 +24,7 @@ export class DatabaseService implements OnModuleInit {
     private readonly loggerService: LoggerService,
     private readonly configService: ConfigService,
   ) {
-    this.batchSize = this.configService.get<number>('BATCH_SIZE') ?? 1000;
+    this.batchSize = this.configService.get<number>('BATCH_SIZE') ?? DEFAULT_BATCH_SIZE;
   }
 
   async onModuleInit(): Promise<void> {
@@ -309,12 +311,24 @@ export class DatabaseService implements OnModuleInit {
       if (arr.length === 0) {
         throw new Error('No valid data provided for table update.');
       }
-      const rows = arr.map((item) => ({
-        id: v4(),
-        data: JSON.stringify(item),
-        checksum: createHash('sha256').update(JSON.stringify(item)).digest('hex'),
-        job_id: jobId,
-      }));
+      const rows = arr.map((item: unknown) => {
+        const rowData: unknown =
+          type === ConfigType.PUSH &&
+          typeof item === 'object' &&
+          item !== null &&
+          'data' in item &&
+          (item as Record<string, unknown>).data !== undefined
+            ? (item as Record<string, unknown>).data
+            : type === ConfigType.PUSH
+              ? null
+              : item;
+        return {
+          id: v4(),
+          data: JSON.stringify(rowData),
+          checksum: createHash('sha256').update(JSON.stringify(rowData)).digest('hex'),
+          job_id: jobId,
+        };
+      });
 
       if (mode === IngestMode.APPEND) {
         await this.insertRows(tableName, rows, jobId, tenantId, type);

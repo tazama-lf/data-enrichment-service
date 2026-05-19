@@ -1,6 +1,8 @@
 import { plainToClass, Transform } from 'class-transformer';
 import { IsBoolean, IsEnum, IsNumber, IsNumberString, IsOptional, IsString, validateSync } from 'class-validator';
 
+const DEFAULT_HTTP_TIMEOUT_MS = 30000;
+
 export enum NodeEnv {
   DEVELOPMENT = 'dev',
   PRODUCTION = 'prod',
@@ -40,7 +42,7 @@ export class EnvironmentVariables {
 
   @IsOptional()
   @IsNumber()
-  HTTP_TIMEOUT?: number = 30000;
+  HTTP_TIMEOUT?: number = DEFAULT_HTTP_TIMEOUT_MS;
 
   @IsString()
   REDIS_HOST!: string;
