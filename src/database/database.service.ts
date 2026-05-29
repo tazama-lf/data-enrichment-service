@@ -285,9 +285,7 @@ export class DatabaseService implements OnModuleInit {
         throw new Error(`Invalid table name: ${tableName}`);
       }
 
-      const safeTableName = `"${tableName.replace(/"/g, '""')}"`;
-
-      await this.DbManager.createTable(safeTableName);
+      await this.DbManager.createTable(tableName);
       this.loggerService.log(`Table "${tableName}" created or already exists.`);
     } catch (error: unknown) {
       if (error instanceof Error) {
