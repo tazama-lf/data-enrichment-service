@@ -2,7 +2,7 @@ import { Injectable, CanActivate, ExecutionContext, UnauthorizedException, Logge
 import { Reflector } from '@nestjs/core';
 import { ClaimValidationResult, TazamaToken, validateTokenAndClaims } from '@tazama-lf/auth-lib';
 import * as jwt from 'jsonwebtoken';
-import { CLAIMS_KEY } from './auth.decorator';
+import { ANY_CLAIMS_KEY, CLAIMS_KEY } from './auth.decorator';
 import { AuthenticatedUser, RequestWithUser } from './auth.types';
 
 const BEARER_TOKEN_PARTS_COUNT = 2;
@@ -18,6 +18,8 @@ export class TazamaAuthGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const requiredClaims =
       this.reflector.getAllAndOverride<string[] | undefined>(CLAIMS_KEY, [context.getHandler(), context.getClass()]) ?? [];
+    const anyOfClaims =
+      this.reflector.getAllAndOverride<string[] | undefined>(ANY_CLAIMS_KEY, [context.getHandler(), context.getClass()]) ?? [];
 
     const request: RequestWithUser = context.switchToHttp().getRequest<RequestWithUser>();
     const authHeader: string | undefined = request.headers.authorization;
@@ -27,7 +29,7 @@ export class TazamaAuthGuard implements CanActivate {
       throw new UnauthorizedException('No Bearer token provided');
     }
 
-    if (requiredClaims.length === 0) {
+    if (requiredClaims.length === 0 && anyOfClaims.length === 0) {
       this.logger.warn('No required claims specified for protected route', this.LOG_CONTEXT);
       throw new UnauthorizedException('No required claims specified');
     }
@@ -41,7 +43,7 @@ export class TazamaAuthGuard implements CanActivate {
 
       const [, token] = tokenParts;
 
-      const claimsToValidate = requiredClaims;
+      const claimsToValidate = [...new Set([...requiredClaims, ...anyOfClaims])];
 
       const validated: ClaimValidationResult = validateTokenAndClaims(token, claimsToValidate);
 
@@ -60,6 +62,17 @@ export class TazamaAuthGuard implements CanActivate {
             `User missing required claims. Required: [${requiredClaims.join(', ')}], Invalid: [${invalidClaims.join(', ')}]`,
             this.LOG_CONTEXT,
           );
+        }
+      }
+
+      if (anyOfClaims.length > 0) {
+        const matchedAnyClaims = anyOfClaims.filter((claim) => validated[claim]);
+        if (matchedAnyClaims.length > 0) {
+          validClaims = [...new Set([...validClaims, ...matchedAnyClaims])];
+          hasValidAccess = true;
+        } else {
+          invalidClaims = [...new Set([...invalidClaims, ...anyOfClaims])];
+          this.logger.warn(`User missing any-of claims. Required any of: [${anyOfClaims.join(', ')}]`, this.LOG_CONTEXT);
         }
       }
 
