@@ -1,12 +1,13 @@
 import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { LoggerService, RedisService } from '@tazama-lf/frms-coe-lib';
-import { ConfigType, Enrichment, ISuccess, JobStatus, PushJob, ScheduleStatus } from '@tazama-lf/tcs-lib';
+import { ConfigType, Enrichment, ISuccess, Job, JobStatus, PushJob, ScheduleStatus } from '@tazama-lf/tcs-lib';
 import { Request } from 'express';
 import { createHash } from 'node:crypto';
 import { ApmSpan } from '../apm/apm.decorators';
 import { DatabaseService } from '../database/database.service';
 import { CreateEnrichDataDto } from './dto/create-enrich-data.dto';
+import { ExecutorService } from '../executor/executor.service';
 
 const DEFAULT_CACHE_TTL_SECONDS = 86400;
 
@@ -19,6 +20,7 @@ export class JobService {
     private readonly db: DatabaseService,
     private readonly configService: ConfigService,
     private readonly redis: RedisService,
+    private readonly executorService: ExecutorService,
   ) {
     this.cacheTtl = this.configService.get<number>('CACHE_TTL', DEFAULT_CACHE_TTL_SECONDS);
   }
@@ -61,10 +63,9 @@ export class JobService {
 
       this.loggerService.log(`Endpoint status: "${endpoint.status}", publishing_status: "${endpoint.publishing_status}"`);
 
-      // JobStatus.DEPLOYED = "STATUS_08_DEPLOYED", JobStatus.APPROVED = "STATUS_04_APPROVED"
       const allowedStatuses = [JobStatus.DEPLOYED, JobStatus.APPROVED];
       const isValidStatus = allowedStatuses.includes(endpoint.status);
-      const isActivePublishing = endpoint.publishing_status === ScheduleStatus.ACTIVE; // "active"
+      const isActivePublishing = endpoint.publishing_status === ScheduleStatus.ACTIVE;
 
       if (!isValidStatus || !isActivePublishing) {
         this.loggerService.error(
@@ -102,6 +103,52 @@ export class JobService {
       }
 
       throw new InternalServerErrorException('An unexpected error occurred while enriching data.');
+    }
+  }
+
+  @ApmSpan('data-enrichment-execution')
+  async jobUpdate(endpointId: string, configType: ConfigType): Promise<ISuccess> {
+    try {
+      const record = (await this.db.getJobById(configType, endpointId)) as PushJob | Job | undefined;
+      if (!record) {
+        this.loggerService.warn(`No record found for endpointId: ${endpointId}`);
+        return {
+          success: false,
+          message: `No record found for endpointId: ${endpointId}`,
+        };
+      }
+      if (configType === ConfigType.PUSH) {
+        const pushRecord = record as PushJob;
+        if (!pushRecord.path) {
+          this.loggerService.warn(`Cannot cache PUSH config: path is null for endpointId ${endpointId}`);
+        } else {
+          await this.redis.setJson(pushRecord.path, JSON.stringify(pushRecord), this.cacheTtl);
+          this.loggerService.log(`Updated cache for key: ${pushRecord.path} with publishing_status : ${pushRecord.publishing_status}`);
+        }
+      } else {
+        const data = record as Job;
+        const isActive = data.publishing_status === ScheduleStatus.ACTIVE;
+
+        if (isActive) {
+          await this.executorService.addCronJob(data);
+        } else {
+          if (!data.schedule_id) {
+            this.loggerService.warn(`Cannot delete cron job: schedule_id missing for job ${data.id}`);
+            return {
+              success: false,
+              message: `Cannot delete cron job: schedule_id missing for job ${data.id}`,
+            };
+          }
+          await this.executorService.deleteCronJob(data.id, data.schedule_id);
+        }
+      }
+      this.loggerService.log(`Transaction successfully done: ${endpointId}`);
+
+      return { success: true, message: `Transaction successfully done: ${endpointId}` };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.loggerService.error(`Error processing message: ${message}`);
+      return { success: false, message };
     }
   }
 }

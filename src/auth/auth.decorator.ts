@@ -11,6 +11,8 @@ export const RequireClaim = (claim: string): ReturnType<typeof SetMetadata> => S
 
 export const TazamaClaims = {
   EDITOR: 'editor',
+  APPROVER: 'approver',
+  PUBLISHER: 'publisher',
 };
 
 export const RequireEditorRole = (): ReturnType<typeof SetMetadata> => RequireClaim(TazamaClaims.EDITOR);
