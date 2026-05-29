@@ -14,7 +14,8 @@ jest.mock('uuid', () => ({
 }));
 
 jest.mock('../../src/apm/apm.decorators', () => ({
-  ApmSpan: () => (target: unknown, propertyKey: string, descriptor: PropertyDescriptor) => descriptor,
+  __esModule: true,
+  ApmSpan: () => (_target: unknown, _propertyKey: string, descriptor: PropertyDescriptor) => descriptor,
 }));
 
 describe('JobService', () => {
@@ -81,8 +82,11 @@ describe('JobService', () => {
   });
 
   afterEach(async () => {
-    await module.close();
     jest.clearAllMocks();
+
+    if (module) {
+      await module.close();
+    }
   });
 
   it('should be defined', () => {
@@ -568,28 +572,19 @@ describe('JobService', () => {
 
       it('should use configured cache TTL', async () => {
         mockConfigService.get.mockReturnValue(3600);
-        const newModule: TestingModule = await Test.createTestingModule({
-          providers: [
-            JobService,
-            { provide: DatabaseService, useValue: mockDatabaseService },
-            { provide: RedisService, useValue: mockRedisService },
-            { provide: ConfigService, useValue: mockConfigService },
-            { provide: LoggerService, useValue: mockLoggerService },
-            { provide: ExecutorService, useValue: mockExecutorService },
-          ],
-        }).compile();
 
-        try {
-          const newService = newModule.get<JobService>(JobService);
-          mockRedisService.getJson.mockResolvedValue('');
-          mockDatabaseService.getPushJobByPath.mockResolvedValue(mockEndpoint as never);
+        const newService = new JobService(mockLoggerService, mockDatabaseService, mockConfigService, mockRedisService, mockExecutorService);
 
-          await newService.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
+        mockRedisService.getJson.mockResolvedValue('');
+        mockDatabaseService.getPushJobByPath.mockResolvedValue(mockEndpoint as never);
 
-          expect(mockRedisService.setJson).toHaveBeenCalledWith('/tcs/test-endpoint', JSON.stringify(mockEndpoint), 3600);
-        } finally {
-          await newModule.close();
-        }
+        await newService.createEnrich({
+          req: mockRequest as Request,
+          body: mockBody,
+          tenantId: 'tenant_456',
+        });
+
+        expect(mockRedisService.setJson).toHaveBeenCalledWith('/tcs/test-endpoint', JSON.stringify(mockEndpoint), 3600);
       });
     });
 
