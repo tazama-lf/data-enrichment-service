@@ -19,6 +19,7 @@ jest.mock('../../src/apm/apm.decorators', () => ({
 
 describe('JobService', () => {
   let service: JobService;
+  let module: TestingModule;
   let mockLoggerService: jest.Mocked<LoggerService>;
   let mockDatabaseService: jest.Mocked<DatabaseService>;
   let mockRedisService: jest.Mocked<RedisService>;
@@ -65,7 +66,7 @@ describe('JobService', () => {
       deleteCronJob: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<ExecutorService>;
 
-    const module: TestingModule = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       providers: [
         JobService,
         { provide: DatabaseService, useValue: mockDatabaseService },
@@ -79,7 +80,8 @@ describe('JobService', () => {
     service = module.get<JobService>(JobService);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await module.close();
     jest.clearAllMocks();
   });
 
@@ -577,13 +579,17 @@ describe('JobService', () => {
           ],
         }).compile();
 
-        const newService = newModule.get<JobService>(JobService);
-        mockRedisService.getJson.mockResolvedValue('');
-        mockDatabaseService.getPushJobByPath.mockResolvedValue(mockEndpoint as never);
+        try {
+          const newService = newModule.get<JobService>(JobService);
+          mockRedisService.getJson.mockResolvedValue('');
+          mockDatabaseService.getPushJobByPath.mockResolvedValue(mockEndpoint as never);
 
-        await newService.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
+          await newService.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
 
-        expect(mockRedisService.setJson).toHaveBeenCalledWith('/tcs/test-endpoint', JSON.stringify(mockEndpoint), 3600);
+          expect(mockRedisService.setJson).toHaveBeenCalledWith('/tcs/test-endpoint', JSON.stringify(mockEndpoint), 3600);
+        } finally {
+          await newModule.close();
+        }
       });
     });
 
