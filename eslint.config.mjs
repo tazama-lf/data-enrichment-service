@@ -38,7 +38,7 @@ export default defineConfig([
       '@typescript-eslint/class-methods-use-this': 'off',
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-floating-promises': 'off',
-      '@typescript-eslint/no-magic-numbers': 'warn',
+      '@typescript-eslint/no-magic-numbers': ['warn', { ignore: [0, 1] }],
       '@typescript-eslint/no-var-requires': 'off',
       '@typescript-eslint/no-unsafe-type-assertion': 'off',
       '@typescript-eslint/no-use-before-define': 'off',
