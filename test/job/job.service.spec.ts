@@ -6,6 +6,7 @@ import { ConfigType, IngestMode, JobStatus, ScheduleStatus } from '@tazama-lf/tc
 import type { Request } from 'express';
 import { DatabaseService } from '../../src/database/database.service';
 import type { CreateEnrichDataDto } from '../../src/job/dto/create-enrich-data.dto';
+import { ExecutorService } from '../../src/executor/executor.service';
 import { JobService } from '../../src/job/job.service';
 
 jest.mock('uuid', () => ({
@@ -13,15 +14,18 @@ jest.mock('uuid', () => ({
 }));
 
 jest.mock('../../src/apm/apm.decorators', () => ({
-  ApmSpan: () => (target: unknown, propertyKey: string, descriptor: PropertyDescriptor) => descriptor,
+  __esModule: true,
+  ApmSpan: () => (_target: unknown, _propertyKey: string, descriptor: PropertyDescriptor) => descriptor,
 }));
 
 describe('JobService', () => {
   let service: JobService;
+  let module: TestingModule;
   let mockLoggerService: jest.Mocked<LoggerService>;
   let mockDatabaseService: jest.Mocked<DatabaseService>;
   let mockRedisService: jest.Mocked<RedisService>;
   let mockConfigService: jest.Mocked<ConfigService>;
+  let mockExecutorService: jest.Mocked<ExecutorService>;
 
   const mockEndpoint = {
     id: 'endpoint-123',
@@ -58,21 +62,31 @@ describe('JobService', () => {
       get: jest.fn().mockReturnValue(86400),
     } as unknown as jest.Mocked<ConfigService>;
 
-    const module: TestingModule = await Test.createTestingModule({
+    mockExecutorService = {
+      addCronJob: jest.fn().mockResolvedValue(undefined),
+      deleteCronJob: jest.fn().mockResolvedValue(undefined),
+    } as unknown as jest.Mocked<ExecutorService>;
+
+    module = await Test.createTestingModule({
       providers: [
         JobService,
         { provide: DatabaseService, useValue: mockDatabaseService },
         { provide: RedisService, useValue: mockRedisService },
         { provide: ConfigService, useValue: mockConfigService },
         { provide: LoggerService, useValue: mockLoggerService },
+        { provide: ExecutorService, useValue: mockExecutorService },
       ],
     }).compile();
 
     service = module.get<JobService>(JobService);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     jest.clearAllMocks();
+
+    if (module) {
+      await module.close();
+    }
   });
 
   it('should be defined', () => {
@@ -558,21 +572,17 @@ describe('JobService', () => {
 
       it('should use configured cache TTL', async () => {
         mockConfigService.get.mockReturnValue(3600);
-        const newModule: TestingModule = await Test.createTestingModule({
-          providers: [
-            JobService,
-            { provide: DatabaseService, useValue: mockDatabaseService },
-            { provide: RedisService, useValue: mockRedisService },
-            { provide: ConfigService, useValue: mockConfigService },
-            { provide: LoggerService, useValue: mockLoggerService },
-          ],
-        }).compile();
 
-        const newService = newModule.get<JobService>(JobService);
+        const newService = new JobService(mockLoggerService, mockDatabaseService, mockConfigService, mockRedisService, mockExecutorService);
+
         mockRedisService.getJson.mockResolvedValue('');
         mockDatabaseService.getPushJobByPath.mockResolvedValue(mockEndpoint as never);
 
-        await newService.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
+        await newService.createEnrich({
+          req: mockRequest as Request,
+          body: mockBody,
+          tenantId: 'tenant_456',
+        });
 
         expect(mockRedisService.setJson).toHaveBeenCalledWith('/tcs/test-endpoint', JSON.stringify(mockEndpoint), 3600);
       });
@@ -674,6 +684,140 @@ describe('JobService', () => {
         await service.createEnrich({ req: mockRequest as Request, body: mockBody, tenantId: 'tenant_456' });
 
         expect(mockDatabaseService.getPushJobByPath).toHaveBeenCalledWith('/tcs/test-endpoint', 'tenant_456');
+      });
+    });
+  });
+
+  describe('jobUpdate', () => {
+    const mockPushRecord = {
+      id: 'endpoint-123',
+      path: '/tcs/test-endpoint',
+      tenant_id: 'tenant_456',
+      table_name: 'test_table',
+      status: JobStatus.DEPLOYED,
+      publishing_status: ScheduleStatus.ACTIVE,
+    };
+
+    const mockPullJob = {
+      id: 'job-456',
+      schedule_id: 'schedule-789',
+      publishing_status: ScheduleStatus.ACTIVE,
+    };
+
+    describe('when record is not found', () => {
+      it('should return success: false with a message when no record is found', async () => {
+        mockDatabaseService.getJobById = jest.fn().mockResolvedValue(undefined);
+
+        const result = await service.jobUpdate('missing-id', ConfigType.PUSH);
+
+        expect(result).toEqual({ success: false, message: 'No record found for endpointId: missing-id' });
+        expect(mockLoggerService.warn).toHaveBeenCalledWith('No record found for endpointId: missing-id');
+      });
+    });
+
+    describe('when configType is PUSH', () => {
+      it('should update Redis cache and return success: true', async () => {
+        mockDatabaseService.getJobById = jest.fn().mockResolvedValue(mockPushRecord);
+
+        const result = await service.jobUpdate('endpoint-123', ConfigType.PUSH);
+
+        expect(mockDatabaseService.getJobById).toHaveBeenCalledWith(ConfigType.PUSH, 'endpoint-123');
+        expect(mockRedisService.setJson).toHaveBeenCalledWith(mockPushRecord.path, JSON.stringify(mockPushRecord), 86400);
+        expect(mockLoggerService.log).toHaveBeenCalledWith(
+          `Updated cache for key: ${mockPushRecord.path} with publishing_status : ${mockPushRecord.publishing_status}`,
+        );
+        expect(result).toEqual({ success: true, message: 'Transaction successfully done: endpoint-123' });
+      });
+
+      it('should warn and return success: true without caching when path is null', async () => {
+        const recordWithoutPath = { ...mockPushRecord, path: null };
+        mockDatabaseService.getJobById = jest.fn().mockResolvedValue(recordWithoutPath);
+
+        const result = await service.jobUpdate('endpoint-123', ConfigType.PUSH);
+
+        expect(mockRedisService.setJson).not.toHaveBeenCalled();
+        expect(mockLoggerService.warn).toHaveBeenCalledWith('Cannot cache PUSH config: path is null for endpointId endpoint-123');
+        expect(result).toEqual({ success: true, message: 'Transaction successfully done: endpoint-123' });
+      });
+    });
+
+    describe('when configType is PULL (non-PUSH)', () => {
+      it('should add a cron job when publishing_status is ACTIVE and return success: true', async () => {
+        mockDatabaseService.getJobById = jest.fn().mockResolvedValue(mockPullJob);
+
+        const result = await service.jobUpdate('job-456', ConfigType.PULL);
+
+        expect(mockExecutorService.addCronJob).toHaveBeenCalledWith(mockPullJob);
+        expect(mockExecutorService.deleteCronJob).not.toHaveBeenCalled();
+        expect(result).toEqual({ success: true, message: 'Transaction successfully done: job-456' });
+      });
+
+      it('should delete a cron job when publishing_status is not ACTIVE and return success: true', async () => {
+        const inactiveJob = { ...mockPullJob, publishing_status: ScheduleStatus.INACTIVE };
+        mockDatabaseService.getJobById = jest.fn().mockResolvedValue(inactiveJob);
+
+        const result = await service.jobUpdate('job-456', ConfigType.PULL);
+
+        expect(mockExecutorService.deleteCronJob).toHaveBeenCalledWith(inactiveJob.id, inactiveJob.schedule_id);
+        expect(mockExecutorService.addCronJob).not.toHaveBeenCalled();
+        expect(result).toEqual({ success: true, message: 'Transaction successfully done: job-456' });
+      });
+
+      it('should return success: false when schedule_id is missing and job is not active', async () => {
+        const jobWithoutScheduleId = { ...mockPullJob, publishing_status: ScheduleStatus.INACTIVE, schedule_id: null };
+        mockDatabaseService.getJobById = jest.fn().mockResolvedValue(jobWithoutScheduleId);
+
+        const result = await service.jobUpdate('job-456', ConfigType.PULL);
+
+        expect(mockExecutorService.deleteCronJob).not.toHaveBeenCalled();
+        expect(mockLoggerService.warn).toHaveBeenCalledWith(
+          `Cannot delete cron job: schedule_id missing for job ${jobWithoutScheduleId.id}`,
+        );
+        expect(result).toEqual({
+          success: false,
+          message: `Cannot delete cron job: schedule_id missing for job ${jobWithoutScheduleId.id}`,
+        });
+      });
+    });
+
+    describe('error handling', () => {
+      it('should return success: false when db.getJobById throws', async () => {
+        const dbError = new Error('DB connection failed');
+        mockDatabaseService.getJobById = jest.fn().mockRejectedValue(dbError);
+
+        const result = await service.jobUpdate('endpoint-123', ConfigType.PUSH);
+
+        expect(result).toEqual({ success: false, message: 'DB connection failed' });
+        expect(mockLoggerService.error).toHaveBeenCalledWith('Error processing message: DB connection failed');
+      });
+
+      it('should return success: false when redis.setJson throws', async () => {
+        mockDatabaseService.getJobById = jest.fn().mockResolvedValue(mockPushRecord);
+        mockRedisService.setJson.mockRejectedValue(new Error('Redis unavailable'));
+
+        const result = await service.jobUpdate('endpoint-123', ConfigType.PUSH);
+
+        expect(result).toEqual({ success: false, message: 'Redis unavailable' });
+        expect(mockLoggerService.error).toHaveBeenCalledWith('Error processing message: Redis unavailable');
+      });
+
+      it('should return success: false when addCronJob throws', async () => {
+        mockDatabaseService.getJobById = jest.fn().mockResolvedValue(mockPullJob);
+        mockExecutorService.addCronJob.mockRejectedValue(new Error('Scheduler error'));
+
+        const result = await service.jobUpdate('job-456', ConfigType.PULL);
+
+        expect(result).toEqual({ success: false, message: 'Scheduler error' });
+        expect(mockLoggerService.error).toHaveBeenCalledWith('Error processing message: Scheduler error');
+      });
+
+      it('should handle non-Error thrown values', async () => {
+        mockDatabaseService.getJobById = jest.fn().mockRejectedValue('string error');
+
+        const result = await service.jobUpdate('endpoint-123', ConfigType.PUSH);
+
+        expect(result).toEqual({ success: false, message: 'string error' });
+        expect(mockLoggerService.error).toHaveBeenCalledWith('Error processing message: string error');
       });
     });
   });

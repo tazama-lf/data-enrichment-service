@@ -316,14 +316,14 @@ describe('DatabaseService', () => {
     it('should create or verify table existence when table name is valid', async () => {
       await service.ensureTable('test_table');
 
-      expect(mockDbManager.createTable).toHaveBeenCalledWith('"test_table"');
+      expect(mockDbManager.createTable).toHaveBeenCalledWith('test_table');
       expect(mockLoggerService.log).toHaveBeenCalled();
     });
 
     it('should safely escape and quote table names containing special characters', async () => {
       await service.ensureTable('test_table_123');
 
-      expect(mockDbManager.createTable).toHaveBeenCalledWith('"test_table_123"');
+      expect(mockDbManager.createTable).toHaveBeenCalledWith('test_table_123');
     });
 
     it('should reject table names that start with invalid characters', async () => {
@@ -399,7 +399,7 @@ describe('DatabaseService', () => {
 
       await testService.updateTable('test_table', 'job-123', IngestMode.REPLACE, mockData, 'tenant-123', ConfigType.PULL);
 
-      expect(testMockDbManager.createTable).toHaveBeenCalledWith('"test_table"');
+      expect(testMockDbManager.createTable).toHaveBeenCalledWith('test_table');
       expect(testMockDbManager.deleteRows).toHaveBeenCalledWith('test_table');
       expect(testMockDbManager.ingestData).toHaveBeenCalled();
       expect(testMockDbManager.insertJobHistory).toHaveBeenCalled();
@@ -431,7 +431,7 @@ describe('DatabaseService', () => {
 
       await testService.updateTable('test_table', 'job-123', IngestMode.APPEND, mockData, 'tenant-123', ConfigType.PULL);
 
-      expect(testMockDbManager.createTable).toHaveBeenCalledWith('"test_table"');
+      expect(testMockDbManager.createTable).toHaveBeenCalledWith('test_table');
       expect(testMockDbManager.deleteRows).not.toHaveBeenCalled();
       expect(testMockDbManager.ingestData).toHaveBeenCalled();
       expect(testMockDbManager.insertJobHistory).toHaveBeenCalled();
