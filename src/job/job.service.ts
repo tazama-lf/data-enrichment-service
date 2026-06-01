@@ -111,20 +111,17 @@ export class JobService {
     try {
       const record = (await this.db.getJobById(configType, endpointId)) as PushJob | Job | undefined;
       if (!record) {
-        this.loggerService.warn(`No record found for endpointId: ${endpointId}`);
-        return {
-          success: false,
-          message: `No record found for endpointId: ${endpointId}`,
-        };
+        throw new NotFoundException(`No record found for endpointId: ${endpointId}`);
       }
       if (configType === ConfigType.PUSH) {
         const pushRecord = record as PushJob;
         if (!pushRecord.path) {
-          this.loggerService.warn(`Cannot cache PUSH config: path is null for endpointId ${endpointId}`);
-        } else {
-          await this.redis.setJson(pushRecord.path, JSON.stringify(pushRecord), this.cacheTtl);
-          this.loggerService.log(`Updated cache for key: ${pushRecord.path} with publishing_status : ${pushRecord.publishing_status}`);
+          const message = `Cannot cache PUSH config: path is null for endpointId ${endpointId}`;
+          this.loggerService.warn(message);
+          return { success: false, message };
         }
+        await this.redis.setJson(pushRecord.path, JSON.stringify(pushRecord), this.cacheTtl);
+        this.loggerService.log(`Updated cache for key: ${pushRecord.path} with publishing_status : ${pushRecord.publishing_status}`);
       } else {
         const data = record as Job;
         const isActive = data.publishing_status === ScheduleStatus.ACTIVE;
@@ -133,11 +130,7 @@ export class JobService {
           await this.executorService.addCronJob(data);
         } else {
           if (!data.schedule_id) {
-            this.loggerService.warn(`Cannot delete cron job: schedule_id missing for job ${data.id}`);
-            return {
-              success: false,
-              message: `Cannot delete cron job: schedule_id missing for job ${data.id}`,
-            };
+            throw new BadRequestException(`Cannot delete cron job: schedule_id missing for job ${data.id}`);
           }
           await this.executorService.deleteCronJob(data.id, data.schedule_id);
         }
@@ -148,7 +141,10 @@ export class JobService {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.loggerService.error(`Error processing message: ${message}`);
-      return { success: false, message };
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to update job configuration.');
     }
   }
 }

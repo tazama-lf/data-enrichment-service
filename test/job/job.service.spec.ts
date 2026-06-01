@@ -710,10 +710,8 @@ describe('JobService', () => {
       it('should return success: false with a message when no record is found', async () => {
         mockDatabaseService.getJobById = jest.fn().mockResolvedValue(undefined);
 
-        const result = await service.jobUpdate('missing-id', ConfigType.PUSH);
-
-        expect(result).toEqual({ success: false, message: 'No record found for endpointId: missing-id' });
-        expect(mockLoggerService.warn).toHaveBeenCalledWith('No record found for endpointId: missing-id');
+        await expect(service.jobUpdate('missing-id', ConfigType.PUSH)).rejects.toThrow(NotFoundException);
+        expect(mockLoggerService.error).toHaveBeenCalledWith('Error processing message: No record found for endpointId: missing-id');
       });
     });
 
@@ -739,7 +737,7 @@ describe('JobService', () => {
 
         expect(mockRedisService.setJson).not.toHaveBeenCalled();
         expect(mockLoggerService.warn).toHaveBeenCalledWith('Cannot cache PUSH config: path is null for endpointId endpoint-123');
-        expect(result).toEqual({ success: true, message: 'Transaction successfully done: endpoint-123' });
+        expect(result).toEqual({ success: false, message: 'Cannot cache PUSH config: path is null for endpointId endpoint-123' });
       });
     });
 
@@ -769,16 +767,11 @@ describe('JobService', () => {
         const jobWithoutScheduleId = { ...mockPullJob, publishing_status: ScheduleStatus.INACTIVE, schedule_id: null };
         mockDatabaseService.getJobById = jest.fn().mockResolvedValue(jobWithoutScheduleId);
 
-        const result = await service.jobUpdate('job-456', ConfigType.PULL);
-
+        await expect(service.jobUpdate('job-456', ConfigType.PULL)).rejects.toThrow(BadRequestException);
         expect(mockExecutorService.deleteCronJob).not.toHaveBeenCalled();
-        expect(mockLoggerService.warn).toHaveBeenCalledWith(
-          `Cannot delete cron job: schedule_id missing for job ${jobWithoutScheduleId.id}`,
+        expect(mockLoggerService.error).toHaveBeenCalledWith(
+          `Error processing message: Cannot delete cron job: schedule_id missing for job ${jobWithoutScheduleId.id}`,
         );
-        expect(result).toEqual({
-          success: false,
-          message: `Cannot delete cron job: schedule_id missing for job ${jobWithoutScheduleId.id}`,
-        });
       });
     });
 
@@ -787,9 +780,7 @@ describe('JobService', () => {
         const dbError = new Error('DB connection failed');
         mockDatabaseService.getJobById = jest.fn().mockRejectedValue(dbError);
 
-        const result = await service.jobUpdate('endpoint-123', ConfigType.PUSH);
-
-        expect(result).toEqual({ success: false, message: 'DB connection failed' });
+        await expect(service.jobUpdate('endpoint-123', ConfigType.PUSH)).rejects.toThrow(InternalServerErrorException);
         expect(mockLoggerService.error).toHaveBeenCalledWith('Error processing message: DB connection failed');
       });
 
@@ -797,9 +788,7 @@ describe('JobService', () => {
         mockDatabaseService.getJobById = jest.fn().mockResolvedValue(mockPushRecord);
         mockRedisService.setJson.mockRejectedValue(new Error('Redis unavailable'));
 
-        const result = await service.jobUpdate('endpoint-123', ConfigType.PUSH);
-
-        expect(result).toEqual({ success: false, message: 'Redis unavailable' });
+        await expect(service.jobUpdate('endpoint-123', ConfigType.PUSH)).rejects.toThrow(InternalServerErrorException);
         expect(mockLoggerService.error).toHaveBeenCalledWith('Error processing message: Redis unavailable');
       });
 
@@ -807,18 +796,14 @@ describe('JobService', () => {
         mockDatabaseService.getJobById = jest.fn().mockResolvedValue(mockPullJob);
         mockExecutorService.addCronJob.mockRejectedValue(new Error('Scheduler error'));
 
-        const result = await service.jobUpdate('job-456', ConfigType.PULL);
-
-        expect(result).toEqual({ success: false, message: 'Scheduler error' });
+        await expect(service.jobUpdate('job-456', ConfigType.PULL)).rejects.toThrow(InternalServerErrorException);
         expect(mockLoggerService.error).toHaveBeenCalledWith('Error processing message: Scheduler error');
       });
 
       it('should handle non-Error thrown values', async () => {
         mockDatabaseService.getJobById = jest.fn().mockRejectedValue('string error');
 
-        const result = await service.jobUpdate('endpoint-123', ConfigType.PUSH);
-
-        expect(result).toEqual({ success: false, message: 'string error' });
+        await expect(service.jobUpdate('endpoint-123', ConfigType.PUSH)).rejects.toThrow(InternalServerErrorException);
         expect(mockLoggerService.error).toHaveBeenCalledWith('Error processing message: string error');
       });
     });

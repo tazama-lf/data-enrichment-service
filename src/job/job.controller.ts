@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Param, ParseEnumPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { RequireAnyClaims, RequireEditorRole, TazamaClaims } from '../auth/auth.decorator';
 import type { AuthenticatedUser } from '../auth/auth.types';
@@ -21,7 +21,7 @@ export class JobController {
 
   @Post('/job-notify/:id')
   @RequireAnyClaims(TazamaClaims.EDITOR, TazamaClaims.APPROVER, TazamaClaims.PUBLISHER)
-  async updateJob(@Param('id') id: string, @Query('type') type: ConfigType): Promise<ISuccess> {
+  async updateJob(@Param('id') id: string, @Query('type', new ParseEnumPipe(ConfigType)) type: ConfigType): Promise<ISuccess> {
     return await this.jobService.jobUpdate(id, type);
   }
 }
