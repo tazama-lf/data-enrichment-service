@@ -1,3 +1,5 @@
+process.env.ENCRYPTION_KEY = 'a'.repeat(32);
+
 import { BadRequestException, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
