@@ -34,7 +34,8 @@ export class JobService {
         throw new BadRequestException('Content-Type must be application/json');
       }
 
-      const { path } = req;
+      const originalPath = req.path;
+      const path = originalPath.replace(/^\/deapi(?=\/|$)/, '');
 
       const cacheKey = path;
       const cachedEndpoint = await this.redis.getJson(cacheKey);
