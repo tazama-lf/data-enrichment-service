@@ -21,7 +21,11 @@ export class JobController {
 
   @Post('/job-notify/:id')
   @RequireAnyClaims(TazamaClaims.EDITOR, TazamaClaims.APPROVER, TazamaClaims.PUBLISHER)
-  async updateJob(@Param('id') id: string, @Query('type', new ParseEnumPipe(ConfigType)) type: ConfigType): Promise<ISuccess> {
-    return await this.jobService.jobUpdate(id, type);
+  async updateJob(
+    @Param('id') id: string,
+    @Query('type', new ParseEnumPipe(ConfigType)) type: ConfigType,
+    @User() user: AuthenticatedUser,
+  ): Promise<ISuccess> {
+    return await this.jobService.jobUpdate(id, type, user.token.tenantId);
   }
 }

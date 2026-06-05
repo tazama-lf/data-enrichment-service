@@ -108,9 +108,9 @@ export class JobService {
   }
 
   @ApmSpan('data-enrichment-execution')
-  async jobUpdate(endpointId: string, configType: ConfigType): Promise<ISuccess> {
+  async jobUpdate(endpointId: string, configType: ConfigType, tenantId: string): Promise<ISuccess> {
     try {
-      const record = (await this.db.getJobById(configType, endpointId)) as PushJob | Job | undefined;
+      const record = (await this.db.getJobById(configType, endpointId, tenantId)) as PushJob | Job | undefined;
       if (!record) {
         throw new NotFoundException(`No record found for endpointId: ${endpointId}`);
       }

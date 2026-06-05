@@ -710,7 +710,7 @@ describe('JobService', () => {
       it('should return success: false with a message when no record is found', async () => {
         mockDatabaseService.getJobById = jest.fn().mockResolvedValue(undefined);
 
-        await expect(service.jobUpdate('missing-id', ConfigType.PUSH)).rejects.toThrow(NotFoundException);
+        await expect(service.jobUpdate('missing-id', ConfigType.PUSH, 'tenant_456')).rejects.toThrow(NotFoundException);
         expect(mockLoggerService.error).toHaveBeenCalledWith('Error processing message: No record found for endpointId: missing-id');
       });
     });
@@ -719,9 +719,9 @@ describe('JobService', () => {
       it('should update Redis cache and return success: true', async () => {
         mockDatabaseService.getJobById = jest.fn().mockResolvedValue(mockPushRecord);
 
-        const result = await service.jobUpdate('endpoint-123', ConfigType.PUSH);
+        const result = await service.jobUpdate('endpoint-123', ConfigType.PUSH, 'tenant_456');
 
-        expect(mockDatabaseService.getJobById).toHaveBeenCalledWith(ConfigType.PUSH, 'endpoint-123');
+        expect(mockDatabaseService.getJobById).toHaveBeenCalledWith(ConfigType.PUSH, 'endpoint-123', 'tenant_456');
         expect(mockRedisService.setJson).toHaveBeenCalledWith(mockPushRecord.path, JSON.stringify(mockPushRecord), 86400);
         expect(mockLoggerService.log).toHaveBeenCalledWith(
           `Updated cache for key: ${mockPushRecord.path} with publishing_status : ${mockPushRecord.publishing_status}`,
@@ -733,7 +733,7 @@ describe('JobService', () => {
         const recordWithoutPath = { ...mockPushRecord, path: null };
         mockDatabaseService.getJobById = jest.fn().mockResolvedValue(recordWithoutPath);
 
-        const result = await service.jobUpdate('endpoint-123', ConfigType.PUSH);
+        const result = await service.jobUpdate('endpoint-123', ConfigType.PUSH, 'tenant_456');
 
         expect(mockRedisService.setJson).not.toHaveBeenCalled();
         expect(mockLoggerService.warn).toHaveBeenCalledWith('Cannot cache PUSH config: path is null for endpointId endpoint-123');
@@ -745,7 +745,7 @@ describe('JobService', () => {
       it('should add a cron job when publishing_status is ACTIVE and return success: true', async () => {
         mockDatabaseService.getJobById = jest.fn().mockResolvedValue(mockPullJob);
 
-        const result = await service.jobUpdate('job-456', ConfigType.PULL);
+        const result = await service.jobUpdate('job-456', ConfigType.PULL, 'tenant_456');
 
         expect(mockExecutorService.addCronJob).toHaveBeenCalledWith(mockPullJob);
         expect(mockExecutorService.deleteCronJob).not.toHaveBeenCalled();
@@ -756,7 +756,7 @@ describe('JobService', () => {
         const inactiveJob = { ...mockPullJob, publishing_status: ScheduleStatus.INACTIVE };
         mockDatabaseService.getJobById = jest.fn().mockResolvedValue(inactiveJob);
 
-        const result = await service.jobUpdate('job-456', ConfigType.PULL);
+        const result = await service.jobUpdate('job-456', ConfigType.PULL, 'tenant_456');
 
         expect(mockExecutorService.deleteCronJob).toHaveBeenCalledWith(inactiveJob.id, inactiveJob.schedule_id);
         expect(mockExecutorService.addCronJob).not.toHaveBeenCalled();
@@ -767,7 +767,7 @@ describe('JobService', () => {
         const jobWithoutScheduleId = { ...mockPullJob, publishing_status: ScheduleStatus.INACTIVE, schedule_id: null };
         mockDatabaseService.getJobById = jest.fn().mockResolvedValue(jobWithoutScheduleId);
 
-        await expect(service.jobUpdate('job-456', ConfigType.PULL)).rejects.toThrow(BadRequestException);
+        await expect(service.jobUpdate('job-456', ConfigType.PULL, 'tenant_456')).rejects.toThrow(BadRequestException);
         expect(mockExecutorService.deleteCronJob).not.toHaveBeenCalled();
         expect(mockLoggerService.error).toHaveBeenCalledWith(
           `Error processing message: Cannot delete cron job: schedule_id missing for job ${jobWithoutScheduleId.id}`,
@@ -780,7 +780,7 @@ describe('JobService', () => {
         const dbError = new Error('DB connection failed');
         mockDatabaseService.getJobById = jest.fn().mockRejectedValue(dbError);
 
-        await expect(service.jobUpdate('endpoint-123', ConfigType.PUSH)).rejects.toThrow(InternalServerErrorException);
+        await expect(service.jobUpdate('endpoint-123', ConfigType.PUSH, 'tenant_456')).rejects.toThrow(InternalServerErrorException);
         expect(mockLoggerService.error).toHaveBeenCalledWith('Error processing message: DB connection failed');
       });
 
@@ -788,7 +788,7 @@ describe('JobService', () => {
         mockDatabaseService.getJobById = jest.fn().mockResolvedValue(mockPushRecord);
         mockRedisService.setJson.mockRejectedValue(new Error('Redis unavailable'));
 
-        await expect(service.jobUpdate('endpoint-123', ConfigType.PUSH)).rejects.toThrow(InternalServerErrorException);
+        await expect(service.jobUpdate('endpoint-123', ConfigType.PUSH, 'tenant_456')).rejects.toThrow(InternalServerErrorException);
         expect(mockLoggerService.error).toHaveBeenCalledWith('Error processing message: Redis unavailable');
       });
 
@@ -796,14 +796,14 @@ describe('JobService', () => {
         mockDatabaseService.getJobById = jest.fn().mockResolvedValue(mockPullJob);
         mockExecutorService.addCronJob.mockRejectedValue(new Error('Scheduler error'));
 
-        await expect(service.jobUpdate('job-456', ConfigType.PULL)).rejects.toThrow(InternalServerErrorException);
+        await expect(service.jobUpdate('job-456', ConfigType.PULL, 'tenant_456')).rejects.toThrow(InternalServerErrorException);
         expect(mockLoggerService.error).toHaveBeenCalledWith('Error processing message: Scheduler error');
       });
 
       it('should handle non-Error thrown values', async () => {
         mockDatabaseService.getJobById = jest.fn().mockRejectedValue('string error');
 
-        await expect(service.jobUpdate('endpoint-123', ConfigType.PUSH)).rejects.toThrow(InternalServerErrorException);
+        await expect(service.jobUpdate('endpoint-123', ConfigType.PUSH, 'tenant_456')).rejects.toThrow(InternalServerErrorException);
         expect(mockLoggerService.error).toHaveBeenCalledWith('Error processing message: string error');
       });
     });
