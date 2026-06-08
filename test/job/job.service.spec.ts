@@ -776,7 +776,7 @@ describe('JobService', () => {
     });
 
     describe('error handling', () => {
-      it('should return success: false when db.getJobById throws', async () => {
+      it('should return success: false when db.getJobId throws', async () => {
         const dbError = new Error('DB connection failed');
         mockDatabaseService.getJobById = jest.fn().mockRejectedValue(dbError);
 
