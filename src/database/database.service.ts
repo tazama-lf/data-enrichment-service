@@ -177,7 +177,7 @@ export class DatabaseService implements OnModuleInit {
     }
   }
 
-  async getJobById(type: ConfigType, id: string, tenantId?: string): Promise<Record<string, unknown> | undefined> {
+  async getJobById(type: ConfigType, id: string, tenantId: string): Promise<Record<string, unknown> | undefined> {
     try {
       if (!this.DbManager) {
         throw new InternalServerErrorException('Database manager not initialized - database operation cannot proceed');
@@ -185,14 +185,7 @@ export class DatabaseService implements OnModuleInit {
 
       const tenantMsg = tenantId ? ` for tenant: ${tenantId}` : '';
       this.loggerService.log(`Getting ${type} job for id: ${id}${tenantMsg}`, this.log_context);
-      const record = await this.DbManager.getIdPushJob(type, id);
-
-      if (tenantId && record && record.tenant_id !== tenantId) {
-        this.loggerService.log(`Job ${id} does not belong to tenant ${tenantId}`, this.log_context);
-        return undefined;
-      }
-
-      return record;
+      return await this.DbManager.getJobId(type, id, tenantId);
     } catch (error) {
       this.handleDatabaseError(error, 'push job', {
         details: `${type} job for tenant ${id}`,
