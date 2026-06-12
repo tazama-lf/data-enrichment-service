@@ -177,14 +177,15 @@ export class DatabaseService implements OnModuleInit {
     }
   }
 
-  async getJobById(type: ConfigType, id: string): Promise<Record<string, unknown> | undefined> {
+  async getJobById(type: ConfigType, id: string, tenantId: string): Promise<Record<string, unknown> | undefined> {
     try {
       if (!this.DbManager) {
         throw new InternalServerErrorException('Database manager not initialized - database operation cannot proceed');
       }
 
-      this.loggerService.log(`Getting ${type} job for id: ${id}`, this.log_context);
-      return await this.DbManager.getIdPushJob(type, id);
+      const tenantMsg = tenantId ? ` for tenant: ${tenantId}` : '';
+      this.loggerService.log(`Getting ${type} job for id: ${id}${tenantMsg}`, this.log_context);
+      return await this.DbManager.getJobId(type, id, tenantId);
     } catch (error) {
       this.handleDatabaseError(error, 'push job', {
         details: `${type} job for tenant ${id}`,
@@ -285,9 +286,7 @@ export class DatabaseService implements OnModuleInit {
         throw new Error(`Invalid table name: ${tableName}`);
       }
 
-      const safeTableName = `"${tableName.replace(/"/g, '""')}"`;
-
-      await this.DbManager.createTable(safeTableName);
+      await this.DbManager.createTable(tableName);
       this.loggerService.log(`Table "${tableName}" created or already exists.`);
     } catch (error: unknown) {
       if (error instanceof Error) {

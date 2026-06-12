@@ -38,7 +38,7 @@ describe('DatabaseService', () => {
     mockDbManager = {
       getPathPushJob: jest.fn().mockResolvedValue(undefined),
       getDefaultPushJob: jest.fn().mockResolvedValue([]),
-      getIdPushJob: jest.fn().mockResolvedValue(undefined),
+      getJobId: jest.fn().mockResolvedValue(undefined),
       ingestData: jest.fn().mockResolvedValue(undefined),
       insertJobHistory: jest.fn().mockResolvedValue(undefined),
       createTable: jest.fn().mockResolvedValue(undefined),
@@ -67,7 +67,7 @@ describe('DatabaseService', () => {
     mockLoggerService.debug.mockClear();
     mockDbManager.getPathPushJob.mockClear();
     mockDbManager.getDefaultPushJob.mockClear();
-    mockDbManager.getIdPushJob.mockClear();
+    mockDbManager.getJobId.mockClear();
     mockDbManager.ingestData.mockClear();
     mockDbManager.insertJobHistory.mockClear();
     mockDbManager.createTable.mockClear();
@@ -179,20 +179,20 @@ describe('DatabaseService', () => {
 
   describe('Retrieving Push Job by ID', () => {
     it('should return push job when valid type and ID are provided', async () => {
-      const mockJob = { id: 'job-123' };
-      mockDbManager.getIdPushJob.mockResolvedValue(mockJob);
+      const mockJob = { id: 'job-123', tenantId: 'default' };
+      mockDbManager.getJobId.mockResolvedValue(mockJob);
 
-      const result = await service.getJobById(ConfigType.PULL, 'job-123');
+      const result = await service.getJobById(ConfigType.PULL, 'job-123', 'default');
 
       expect(result).toEqual(mockJob);
-      expect(mockDbManager.getIdPushJob).toHaveBeenCalledWith(ConfigType.PULL, 'job-123');
+      expect(mockDbManager.getJobId).toHaveBeenCalledWith(ConfigType.PULL, 'job-123', 'default');
       expect(mockLoggerService.log).toHaveBeenCalled();
     });
 
     it('should throw InternalServerErrorException when database query fails', async () => {
-      mockDbManager.getIdPushJob.mockRejectedValue(new Error('Database error'));
+      mockDbManager.getJobId.mockRejectedValue(new Error('Database error'));
 
-      await expect(service.getJobById(ConfigType.PULL, 'job-123')).rejects.toThrow(InternalServerErrorException);
+      await expect(service.getJobById(ConfigType.PULL, 'job-123', 'default')).rejects.toThrow(InternalServerErrorException);
     });
 
     it('should throw InternalServerErrorException when database manager is not initialized', async () => {
@@ -316,14 +316,14 @@ describe('DatabaseService', () => {
     it('should create or verify table existence when table name is valid', async () => {
       await service.ensureTable('test_table');
 
-      expect(mockDbManager.createTable).toHaveBeenCalledWith('"test_table"');
+      expect(mockDbManager.createTable).toHaveBeenCalledWith('test_table');
       expect(mockLoggerService.log).toHaveBeenCalled();
     });
 
     it('should safely escape and quote table names containing special characters', async () => {
       await service.ensureTable('test_table_123');
 
-      expect(mockDbManager.createTable).toHaveBeenCalledWith('"test_table_123"');
+      expect(mockDbManager.createTable).toHaveBeenCalledWith('test_table_123');
     });
 
     it('should reject table names that start with invalid characters', async () => {
@@ -377,7 +377,7 @@ describe('DatabaseService', () => {
       const testMockDbManager = {
         getPathPushJob: jest.fn().mockResolvedValue(undefined),
         getDefaultPushJob: jest.fn().mockResolvedValue([]),
-        getIdPushJob: jest.fn().mockResolvedValue(undefined),
+        getJobId: jest.fn().mockResolvedValue(undefined),
         ingestData: jest.fn().mockResolvedValue(undefined),
         insertJobHistory: jest.fn().mockResolvedValue(undefined),
         createTable: jest.fn().mockResolvedValue(undefined),
@@ -399,7 +399,7 @@ describe('DatabaseService', () => {
 
       await testService.updateTable('test_table', 'job-123', IngestMode.REPLACE, mockData, 'tenant-123', ConfigType.PULL);
 
-      expect(testMockDbManager.createTable).toHaveBeenCalledWith('"test_table"');
+      expect(testMockDbManager.createTable).toHaveBeenCalledWith('test_table');
       expect(testMockDbManager.deleteRows).toHaveBeenCalledWith('test_table');
       expect(testMockDbManager.ingestData).toHaveBeenCalled();
       expect(testMockDbManager.insertJobHistory).toHaveBeenCalled();
@@ -409,7 +409,7 @@ describe('DatabaseService', () => {
       const testMockDbManager = {
         getPathPushJob: jest.fn().mockResolvedValue(undefined),
         getDefaultPushJob: jest.fn().mockResolvedValue([]),
-        getIdPushJob: jest.fn().mockResolvedValue(undefined),
+        getJobId: jest.fn().mockResolvedValue(undefined),
         ingestData: jest.fn().mockResolvedValue(undefined),
         insertJobHistory: jest.fn().mockResolvedValue(undefined),
         createTable: jest.fn().mockResolvedValue(undefined),
@@ -431,7 +431,7 @@ describe('DatabaseService', () => {
 
       await testService.updateTable('test_table', 'job-123', IngestMode.APPEND, mockData, 'tenant-123', ConfigType.PULL);
 
-      expect(testMockDbManager.createTable).toHaveBeenCalledWith('"test_table"');
+      expect(testMockDbManager.createTable).toHaveBeenCalledWith('test_table');
       expect(testMockDbManager.deleteRows).not.toHaveBeenCalled();
       expect(testMockDbManager.ingestData).toHaveBeenCalled();
       expect(testMockDbManager.insertJobHistory).toHaveBeenCalled();
@@ -441,7 +441,7 @@ describe('DatabaseService', () => {
       const testMockDbManager = {
         getPathPushJob: jest.fn().mockResolvedValue(undefined),
         getDefaultPushJob: jest.fn().mockResolvedValue([]),
-        getIdPushJob: jest.fn().mockResolvedValue(undefined),
+        getJobId: jest.fn().mockResolvedValue(undefined),
         ingestData: jest.fn().mockResolvedValue(undefined),
         insertJobHistory: jest.fn().mockResolvedValue(undefined),
         createTable: jest.fn().mockResolvedValue(undefined),
