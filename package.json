@@ -34,10 +34,10 @@
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/schedule": "^6.0.1",
-    "@tazama-lf/auth-lib": "^2.1.0",
-    "@tazama-lf/frms-coe-lib": "8.1.0-rc.2",
-    "@tazama-lf/frms-coe-startup-lib": "3.0.2-rc.5",
-    "@tazama-lf/tcs-lib": "^1.0.64",
+    "@tazama-lf/auth-lib": "4.0.0-rc.5",
+    "@tazama-lf/frms-coe-lib": "8.2.0-rc.6",
+    "@tazama-lf/frms-coe-startup-lib": "3.1.0-rc.8",
+    "@tazama-lf/tcs-lib": "1.0.157-rc.0",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "bcrypt": "^6.0.0",
@@ -53,7 +53,7 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "ssh2-sftp-client": "^12.0.1",
-    "uuid": "11.1.0"
+    "uuid": "^11.1.1"
   },
   "devDependencies": {
     "@eslint-community/eslint-plugin-eslint-comments": "^4.5.0",
@@ -95,6 +95,12 @@
     ]
   },
   "overrides": {
-    "cron": "4.3.3"
+    "cron": "4.3.3",
+    "uuid": "^11.1.1",
+    "@opentelemetry/core": "^2.8.0",
+    "undici": "^6.27.0",
+    "form-data": "^4.0.6",
+    "multer": "^2.2.0",
+    "protobufjs": "^7.6.3"
   }
 }
